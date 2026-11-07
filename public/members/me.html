@@ -115,6 +115,88 @@ async function wantSection() {
     search, el('details', el('summary.small', 'Add by hand'), manual), box];
 }
 
+function exportSection(books) {
+  const btn = el('button', { type: 'button' }, 'Download Goodreads CSV');
+  const status = el('p.small.muted', { role: 'status' });
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    status.textContent = 'Building…';
+    try {
+      const [{ tiers }, wantList] = await Promise.all([
+        api(`/api/members/${me.id}`),
+        api('/api/me/want-to-read'),
+      ]);
+
+      const TIER_RATING = { S: 5, A: 4, B: 3, C: 2, D: 1, F: 0 };
+      const tierMap = {};
+      for (const [tier, entries] of Object.entries(tiers)) {
+        for (const e of entries) tierMap[e.book_id] = tier;
+      }
+
+      const grDate = (d) => {
+        if (!d) return '';
+        const p = d.split('-');
+        return p.length === 3 ? `${p[0]}/${p[1]}/${p[2]}` : `${p[0]}/${p[1]}/01`;
+      };
+
+      const esc = (v) => {
+        const s = String(v ?? '');
+        return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+
+      const headers = [
+        'Book Id', 'Title', 'Author', 'Author l-f', 'Additional Authors',
+        'ISBN', 'ISBN13', 'My Rating', 'Average Rating', 'Publisher', 'Binding',
+        'Number of Pages', 'Year Published', 'Original Publication Year',
+        'Date Read', 'Date Added', 'Bookshelves', 'Bookshelves with positions',
+        'Exclusive Shelf', 'My Review', 'Spoiler', 'Private Notes', 'Read Count', 'Owned Copies',
+      ];
+      const rows = [headers];
+
+      for (const book of books) {
+        const tier = tierMap[book.id];
+        if (tier === 'N') continue;
+        const rating = tier != null ? (TIER_RATING[tier] ?? 0) : 0;
+        const dateRead = grDate(book.read_date);
+        rows.push([
+          book.id, book.title, book.author || '', '', '', '', '',
+          rating, '', '', '', '', '', '',
+          dateRead, dateRead, 'read', 'read (#1)', 'read', '', '', '', 1, 0,
+        ]);
+      }
+
+      for (const book of wantList) {
+        rows.push([
+          '', book.title, book.author || '', '', '', '', '',
+          0, '', '', '', '', book.year || '', '',
+          '', '', 'to-read', 'to-read (#1)', 'to-read', '', '', '', 0, 0,
+        ]);
+      }
+
+      const csv = rows.map((r) => r.map(esc).join(',')).join('\n');
+      const a = el('a', {
+        href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
+        download: 'geb-club-goodreads.csv',
+      });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      status.textContent = `Exported ${rows.length - 1} book${rows.length === 2 ? '' : 's'}.`;
+    } catch (err) {
+      status.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  return [
+    el('h2', 'Export'),
+    el('p.muted.small', 'Download your club reads and want-to-read list in Goodreads CSV format, importable into ', el('a', { href: 'https://app.thestorygraph.com/import', target: '_blank', rel: 'noopener' }, 'StoryGraph'), '.'),
+    el('p', btn), status,
+  ];
+}
+
 async function notesSection(books) {
   const notes = await api('/api/me/notes');
   const pick = el('select', { id: 'nt-book', style: 'width:100%' },
@@ -151,7 +233,7 @@ async function load() {
   const parts = [
     el('h1', el('span', { id: 'who' }, me.name)),
     nameSection(), linksSection(), favoriteSection(books), await tierSection(books),
-    await wantSection(), await notesSection(books), passwordSection(),
+    await wantSection(), await notesSection(books), exportSection(books), passwordSection(),
   ];
   main.replaceChildren(...parts.flat(Infinity).filter(Boolean));
 }

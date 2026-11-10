@@ -1,6 +1,7 @@
 -- Cover images and official StoryGraph pages for books read. Safe to re-run.
 -- Covers: Penguin Random House (images.penguinrandomhouse.com/cover/<ISBN>) for the editions
 -- the club picked; Open Library otherwise. A #crop suffix trims a scan with extra margins to 2:3.
+-- A cover_url starting with / is a file of our own in public/.
 UPDATE books_read SET cover_url = 'https://covers.openlibrary.org/b/id/14368453-L.jpg', storygraph_url = 'https://app.thestorygraph.com/books/7afddb73-0d19-4698-9047-0b7572fffccc' WHERE position = 1; -- Gödel, Escher, Bach
 UPDATE books_read SET cover_url = 'https://covers.openlibrary.org/b/id/10496793-L.jpg', storygraph_url = 'https://app.thestorygraph.com/books/299846e6-b438-4c45-ab0d-25593b7bef28' WHERE position = 2; -- The Traitor Baru Cormorant
 UPDATE books_read SET cover_url = 'https://covers.openlibrary.org/b/id/10286212-L.jpg', storygraph_url = 'https://app.thestorygraph.com/books/f2a8c0d1-2e6b-4e44-b6a4-83dfa871bbf2' WHERE position = 3; -- The Art of Gathering
@@ -23,3 +24,4 @@ UPDATE books_read SET cover_url = 'https://images.penguinrandomhouse.com/cover/9
 UPDATE books_read SET cover_url = 'https://covers.openlibrary.org/b/id/7355949-L.jpg', storygraph_url = 'https://app.thestorygraph.com/books/92b37194-21e3-494e-8f4d-11843d8331a0' WHERE position = 20; -- Ancillary Justice
 UPDATE books_read SET cover_url = 'https://covers.openlibrary.org/b/id/415115-L.jpg', storygraph_url = 'https://app.thestorygraph.com/books/21b169f6-e6b9-4867-b168-0ac141b1024a' WHERE position = 21; -- Cod
 UPDATE books_read SET cover_url = 'https://covers.openlibrary.org/b/id/10226290-L.jpg', storygraph_url = 'https://app.thestorygraph.com/books/a4f97770-d661-4687-944e-89e02077190d' WHERE position = 22; -- Piranesi
+UPDATE books_read SET cover_url = '/cover-files/the-end-of-everything.webp', storygraph_url = 'https://app.thestorygraph.com/books/2fd37525-9dd5-424f-8001-4b4fcb2e017e' WHERE position = 23; -- The End of Everything

@@ -22,6 +22,15 @@ export async function onRequestGet({ request, env, params, waitUntil }) {
   if (!book?.cover_url) return new Response('no cover', { status: 404 });
   const source = book.cover_url.replace(/#crop$/, '');
 
+  // A cover file of our own (public/cover-files/), for books no source has a good image of.
+  if (source.startsWith('/')) {
+    const own = await env.ASSETS.fetch(new URL(source, request.url));
+    if (!own.ok) return new Response('no cover', { status: 404 });
+    const res = imageResponse(await own.arrayBuffer(), own.headers.get('Content-Type') || 'image/webp');
+    waitUntil(cache.put(request, res.clone()));
+    return res;
+  }
+
   let res;
   const stored = await env.DB.prepare('SELECT source_url, content_type, data FROM cover_cache WHERE book_id = ?').bind(id).first();
   if (stored && stored.source_url === source) {

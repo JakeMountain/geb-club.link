@@ -1,8 +1,8 @@
 import { isMember } from '../src/auth.js';
 
-// Everything under /members, /prints and /api is members-only, except login and /api/public.
+// Everything under /members, /prints and /api is members-only, except login, /api/public and the print gallery page.
 // (/prints holds saved print-gallery images, which can be camera photos.)
-const OPEN = ['/api/login', '/api/logout'];
+const OPEN = ['/api/login', '/api/logout', '/members/gallery', '/members/gallery.html'];
 
 export async function onRequest({ request, env, next }) {
   const url = new URL(request.url);

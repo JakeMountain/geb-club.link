@@ -13,26 +13,11 @@
   <a href="/history">History</a>
   <a href="/voting">How we vote</a>
   <a href="/members/" aria-current="page">Members</a>
-  <button class="link small" id="logout">Sign out</button>
 </nav></header>
 <main class="wide">
   <h1>Members</h1>
 
   <section id="account"></section>
-
-  <h2>Elections</h2>
-  <div id="elections"><p class="muted">Loading…</p></div>
-  <details class="card" id="new-election-box" hidden>
-    <summary>New election</summary>
-    <form id="new-election">
-      <div class="row">
-        <div><label for="ne-title">Title</label><input id="ne-title" required style="width:100%"></div>
-        <div><label for="ne-method">Voting method</label><select id="ne-method" style="width:100%"></select></div>
-        <button>Create</button>
-      </div>
-      <p class="error small" id="ne-msg" role="alert"></p>
-    </form>
-  </details>
 
   <h2>Members</h2>
   <div class="table-wrap" id="members"><p class="muted">Loading…</p></div>
@@ -42,9 +27,8 @@
 
 </main>
 <script type="module">
-import { api, el, fmt, pill, logout, getMe } from './app.js';
+import { api, el, fmt, pill, getMe } from './app.js';
 
-document.getElementById('logout').onclick = logout;
 let me = null;
 
 // ---------------------------------------------------------------- account
@@ -67,7 +51,7 @@ async function renderAccount() {
         el('a', { href: '/members/me' }, 'My page'), ' · ',
         el('button.link', { type: 'button', onclick: async () => {
           await api('/api/accounts/logout', { method: 'POST' });
-          me = null; dispatchEvent(new CustomEvent('geb:account', { detail: null })); renderAccount(); refreshActions();
+          me = null; dispatchEvent(new CustomEvent('geb:account', { detail: null })); renderAccount();
         } }, 'Switch account')));
     return;
   }
@@ -81,7 +65,7 @@ async function renderAccount() {
   const upDiscord = el('input', { id: 'su-discord', maxLength: 40, autocomplete: 'username', style: 'width:100%' });
   const upPw = el('input', { type: 'password', id: 'su-pw', autocomplete: 'new-password', style: 'width:100%' });
 
-  const signedIn = (r) => { me = r.me; dispatchEvent(new CustomEvent('geb:account', { detail: me })); renderAccount(); refreshActions(); loadMembers(); };
+  const signedIn = (r) => { me = r.me; dispatchEvent(new CustomEvent('geb:account', { detail: me })); renderAccount(); loadMembers(); };
   box.replaceChildren(
     members.length ? el('div.card', el('h3', 'Sign in'), onSubmit(el('form',
       el('div.row',
@@ -100,24 +84,7 @@ async function renderAccount() {
       upMsg), async () => signedIn(await api('/api/accounts', { method: 'POST', body: { first_name: upFirst.value, discord: upDiscord.value, password: upPw.value } })), upMsg)));
 }
 
-function refreshActions() {
-  document.getElementById('new-election-box').hidden = !me;
-}
-
 // ---------------------------------------------------------------- data
-async function loadElections() {
-  const { elections, methods } = await api('/api/elections');
-  const sel = document.getElementById('ne-method');
-  if (!sel.options.length) sel.append(...Object.entries(methods).map(([k, v]) => el('option', { value: k }, v)));
-  const box = document.getElementById('elections');
-  if (!elections.length) { box.replaceChildren(el('p.muted', 'None')); return; }
-  box.replaceChildren(...elections.map((e) => el('div.card',
-    el('div', el('a', { href: `/members/election?id=${e.id}` }, el('strong', e.title)), ' ', pill(e.status)),
-    el('div.muted.small',
-      e.status === 'closed' ? `Winner: ${e.winner ?? '—'} · ${e.n_ballots} ballots · ${methods[e.method] ?? e.method}`
-        : `${e.n_candidates} books · ${e.n_ballots} ballots · ${methods[e.method] ?? e.method}`))));
-}
-
 async function loadHistory() {
   const books = await api('/api/books');
   document.getElementById('history').replaceChildren(...books.map((b) => el('li',
@@ -149,18 +116,9 @@ async function loadMembers() {
       el('td.num', st[m.id] ? el('strong', fmt(st[m.id].weight)) : '')))));
 }
 
-document.getElementById('new-election').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  try {
-    const { id } = await api('/api/elections', { method: 'POST', body: {
-      title: document.getElementById('ne-title').value, method: document.getElementById('ne-method').value } });
-    location.href = `/members/election?id=${id}`;
-  } catch (err) { document.getElementById('ne-msg').textContent = err.message; }
-});
-
 me = await getMe();
-renderAccount(); refreshActions();
-loadElections(); loadHistory(); loadMembers();
+renderAccount();
+loadHistory(); loadMembers();
 </script>
 <script src="/nav.js" defer></script>
 </body>

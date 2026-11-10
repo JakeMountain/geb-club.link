@@ -30,7 +30,7 @@ async function load() {
   const { election: e, candidates, ballots, methods, live } = data;
   document.title = `${e.title} · GEB Club`;
   const head = [
-    el('p.small', el('a', { href: '/members/' }, '← All elections')),
+    el('p.small', el('a', { href: '/members/current' }, '← All elections')),
     el('h1', e.title, ' ', pill(e.status)),
     el('p.muted', methods[e.method] ?? e.method,
       admin() && e.status !== 'closed' && [' · ', action('Rename', async () => {
@@ -157,7 +157,7 @@ function nominating(e, candidates) {
       action('Delete election', async () => {
         if (!confirm('Delete this election and all its nominations?')) return;
         await api(`/api/elections/${id}`, { method: 'DELETE' });
-        location.href = '/members/';
+        location.href = '/members/current';
       }, '.secondary')),
   ];
 }

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Current book · GEB Club</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.svg">
+</head>
+<body>
+<header class="site"><nav>
+  <a class="brand" href="/" aria-label="GEB Club"><canvas aria-hidden="true"></canvas></a>
+  <a href="/history">History</a>
+  <a href="/voting">How we vote</a>
+  <a href="/members/">Members</a>
+</nav></header>
+<main class="wide" id="main"><p class="muted">Loading…</p></main>
+<script type="module">
+import { api, el, pill, bookLinks, getMe } from './app.js';
+
+const main = document.getElementById('main');
+
+function currentBook(book) {
+  if (!book) return [el('h2', 'Current book'), el('p.muted', 'None yet.')];
+  return [
+    el('h2', 'Current book'),
+    el('div.book-head',
+      book.cover_url ? el('img.cover', { src: book.cover_url, alt: '', className: book.cover_url.endsWith('#crop') ? 'cover crop' : 'cover' }) : '',
+      el('div',
+        el('h3', el('cite', book.title)),
+        el('p.muted', [`#${book.position}`, book.author, book.nominator && book.nominator !== 'none' ? `nominated by ${book.nominator}` : null, book.read_date].filter(Boolean).join(' · ')),
+        book.notes ? el('p.small', book.notes) : '',
+        bookLinks(book),
+        el('p.small', el('a', { href: `/members/book?id=${book.id}` }, 'Notes and favorites')))),
+  ];
+}
+
+async function loadElections(box, methodSelect) {
+  const { elections, methods } = await api('/api/elections');
+  methodSelect.append(...Object.entries(methods).map(([k, v]) => el('option', { value: k }, v)));
+  if (!elections.length) { box.replaceChildren(el('p.muted', 'None')); return; }
+  box.replaceChildren(...elections.map((e) => el('div.card',
+    el('div', el('a', { href: `/members/election?id=${e.id}` }, el('strong', e.title)), ' ', pill(e.status)),
+    el('div.muted.small',
+      e.status === 'closed' ? `Winner: ${e.winner ?? '—'} · ${e.n_ballots} ballots · ${methods[e.method] ?? e.method}`
+        : `${e.n_candidates} books · ${e.n_ballots} ballots · ${methods[e.method] ?? e.method}`))));
+}
+
+function newElectionBox(me) {
+  const title = el('input', { id: 'ne-title', required: true, style: 'width:100%' });
+  const method = el('select', { id: 'ne-method', style: 'width:100%' });
+  const msg = el('p.error.small', { role: 'alert' });
+  const form = el('form',
+    el('div.row',
+      el('div', el('label', { htmlFor: 'ne-title' }, 'Title'), title),
+      el('div', el('label', { htmlFor: 'ne-method' }, 'Voting method'), method),
+      el('button', 'Create')),
+    msg);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const { id } = await api('/api/elections', { method: 'POST', body: { title: title.value, method: method.value } });
+      location.href = `/members/election?id=${id}`;
+    } catch (err) { msg.textContent = err.message; }
+  });
+  return { box: el('details.card', { hidden: !me }, el('summary', 'New election'), form), method };
+}
+
+async function load() {
+  const [{ books }, me] = await Promise.all([api('/api/books'), getMe()]);
+  const elections = el('div', el('p.muted', 'Loading…'));
+  const { box: newElection, method: methodSelect } = newElectionBox(me);
+  main.replaceChildren(
+    el('h1', 'Current book'),
+    ...currentBook(books.at(-1)),
+    el('h2', 'Elections'),
+    elections,
+    newElection);
+  await loadElections(elections, methodSelect);
+}
+
+load().catch((err) => main.replaceChildren(el('p.error', err.message)));
+</script>
+<script src="/nav.js" defer></script>
+</body>
+</html>

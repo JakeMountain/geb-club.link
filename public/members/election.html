@@ -16,7 +16,7 @@
 </nav></header>
 <main id="main"><p class="muted">Loading…</p></main>
 <script type="module">
-import { api, el, fmt, pill, bookCard, bookSearch, getMe } from './app.js';
+import { api, el, fmt, pill, bookCard, bookSearch, getMe, who, thumb, coverUrl } from './app.js';
 
 const id = new URLSearchParams(location.search).get('id');
 const main = document.getElementById('main');
@@ -30,7 +30,7 @@ async function load() {
   const { election: e, candidates, ballots, methods, live } = data;
   document.title = `${e.title} · GEB Club`;
   const head = [
-    el('p.small', el('a', { href: '/members/current' }, '← All elections')),
+    el('p.small.back', el('a', { href: '/members/current' }, '← All elections')),
     el('h1', e.title, ' ', pill(e.status)),
     el('p.muted', methods[e.method] ?? e.method,
       admin() && e.status !== 'closed' && [' · ', action('Rename', async () => {
@@ -153,7 +153,7 @@ function nominating(e, candidates) {
   return [
     ...list,
     form,
-    el('p', action('Open voting', () => api(`/api/elections/${id}`, { method: 'PATCH', body: { status: 'voting' } })), ' ',
+    el('div.actions', action('Open voting', () => api(`/api/elections/${id}`, { method: 'PATCH', body: { status: 'voting' } })),
       action('Delete election', async () => {
         if (!confirm('Delete this election and all its nominations?')) return;
         await api(`/api/elections/${id}`, { method: 'DELETE' });
@@ -167,12 +167,14 @@ async function voting(e, candidates, ballots, live) {
   const voted = new Set(ballots.map((b) => String(b.member_id)));
   const votedList = [
     el('h2', `Voted (${ballots.length})`),
-    members.length ? el('p', members.map((m, i) => [i ? ', ' : '', voted.has(String(m.id)) ? el('strong', m.name) : el('span.muted', m.name)])) : '',
+    members.length ? el('ul.voters', [...members].sort((x, y) => voted.has(String(y.id)) - voted.has(String(x.id)))
+      .map((m) => el(voted.has(String(m.id)) ? 'li.in' : 'li', { title: voted.has(String(m.id)) ? 'Voted' : 'Not yet' }, who(m.name)))) : '',
   ];
   if (!me) return [el('h2', 'Ballot'), signInLink(), ...votedList];
 
   const { scores } = await api(`/api/elections/${id}/ballot`);
   const msg = el('p.small.error', { role: 'alert' });
+  const count = el('span.count.small.muted', { role: 'status' });
   const form = el('form',
     myOrder(e, candidates).map((c) => el('div.card', bookCard(c, [
       c.nominator && el('div.small.muted', `Nominated by ${c.nominator}`),
@@ -182,12 +184,16 @@ async function voting(e, candidates, ballots, live) {
           el('span', s)))),
       admin() && editBook(c),
     ]))),
-    el('p', el('button', scores ? 'Update ballot' : 'Submit ballot'),
-      scores && [' ', action('Withdraw', async () => {
+    msg,
+    el('div.ballot-bar', el('button', scores ? 'Update ballot' : 'Submit ballot'),
+      scores && action('Withdraw', async () => {
         if (!confirm('Withdraw your ballot?')) return;
         await api(`/api/elections/${id}/ballot`, { method: 'DELETE' });
-      }, '.secondary')]),
-    msg);
+      }, '.secondary'),
+      count));
+  const tick = () => { count.textContent = `${new Set([...new FormData(form).keys()]).size} / ${candidates.length}`; };
+  form.addEventListener('change', tick);
+  tick();
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const fd = new FormData(form);
@@ -200,18 +206,18 @@ async function voting(e, candidates, ballots, live) {
 
   return [
     el('h2', 'Ballot'),
-    el('p.small', 'Voting as ', el('strong', me.name), scores ? el('span.ok', ' · voted') : ''),
+    el('p.small', 'Voting as ', el('strong', who(me.name)), scores ? el('span.ok', ' · voted') : ''),
     form,
     ...votedList,
     admin() && [el('h2', 'Count so far'),
       live ? tallyView(e, candidates, ballots, live, live.winner, 'Winning now',
         (bl) => action('Remove', () => confirm(`Remove ${bl.name}'s ballot?`) && api(`/api/elections/${id}/ballots/${bl.member_id}`, { method: 'DELETE' }), '.link.small'))
         : el('p.muted', 'No ballots yet')],
-    el('p',
+    el('div.actions',
       action('Close voting and count', async () => {
         if (!confirm('Close voting and count? This cannot be undone.')) return;
         await api(`/api/elections/${id}/close`, { method: 'POST', body: {} });
-      }), ' ',
+      }),
       action('Back to nominating', () => api(`/api/elections/${id}`, { method: 'PATCH', body: { status: 'nominating' } }), '.secondary')),
   ];
 }
@@ -229,34 +235,45 @@ function tallyView(e, candidates, ballots, r, winnerId, winnerLabel, ballotActio
   const [a, b] = r.finalists;
   const weighted = r.method === 'debt-star';
 
+  const cover = (c) => thumb(c.cover_url || coverUrl(c.cover_id, 'S'));
+  const isWinner = (c) => String(c.id) === String(winnerId);
+  const runoffTotal = b ? (r.runoff[a] + r.runoff[b] + r.runoff.noPreference) || 1 : 1;
+  const side = (cid) => el(`div.side${String(cid) === String(winnerId) ? '' : '.lost'}`, el('span.n', fmt(r.runoff[cid])), title(cid));
+
   return [
-    el('div.card', el('div.muted.small', winnerLabel), bookCard(winner)),
+    el('div.card.winner-card', el('div.eyebrow', winnerLabel), bookCard(winner)),
     weighted && r.plainStarWinner !== String(winnerId)
       ? el('p.callout.small', `Plain STAR winner: ${title(r.plainStarWinner)}`) : '',
     r.tiebreaks.map((t) => el('p.callout.small',
       `${t.round === 'runoff' ? 'Runoff' : 'Scoring round'} tie: ${t.tied.map(title).join(', ')}. Broken by ${t.how}.`)),
 
     el('h2', 'Scoring round'),
-    el('table', [...candidates].sort((x, y) => r.totals[y.id] - r.totals[x.id]).map((c) => el('tr',
-      el('td', c.title, r.finalists.includes(String(c.id)) ? el('span.muted.small', ' · finalist') : ''),
-      el('td', { style: 'width:40%' }, el('div.bar', { style: `width:${(100 * r.totals[c.id]) / maxTotal}%` })),
-      el('td.num', fmt(r.totals[c.id]))))),
+    el('div.tally', [...candidates].sort((x, y) => r.totals[y.id] - r.totals[x.id]).map((c) => {
+      const fin = r.finalists.includes(String(c.id)) ? '.fin' : '';
+      return [
+        el(`div.name${fin}`, cover(c), el('span', c.title, fin ? el('span.muted.small', { style: 'font-weight:400' }, ' · finalist') : '')),
+        el(`div.track${fin}`, el('div.bar', { style: `width:${(100 * r.totals[c.id]) / maxTotal}%` })),
+        el(`div.val${fin}`, fmt(r.totals[c.id]))];
+    })),
 
     b ? [el('h2', 'Runoff'),
-      el('table',
-        el('tr', el('td', title(a)), el('td.num', fmt(r.runoff[a]))),
-        el('tr', el('td', title(b)), el('td.num', fmt(r.runoff[b]))),
-        el('tr', el('td.muted', 'No preference'), el('td.num.muted', fmt(r.runoff.noPreference))))] : '',
+      el('div.runoff',
+        el('div.sides', side(a), side(b)),
+        el('div.split', { role: 'img', 'aria-label': `${title(a)} ${fmt(r.runoff[a])}, ${title(b)} ${fmt(r.runoff[b])}, no preference ${fmt(r.runoff.noPreference)}` },
+          el('i.a', { style: `flex:${r.runoff[a] / runoffTotal}` }),
+          el('i.none', { style: `flex:${r.runoff.noPreference / runoffTotal}` }),
+          el('i.b', { style: `flex:${r.runoff[b] / runoffTotal}` })),
+        el('div.mid.muted.small', `No preference ${fmt(r.runoff.noPreference)}`))] : '',
 
     el('h2', `Ballots (${ballots.length})`),
-    el('div.table-wrap', el('table',
-      el('tr', el('th', 'Voter'), ballotAction && el('th'), weighted && el('th.num', 'Debt'), el('th.num', 'Weight'), candidates.map((c) => el('th.num', { title: c.title }, c.title.length > 18 ? c.title.slice(0, 16) + '…' : c.title))),
-      ballots.map((bl) => el('tr',
-        el('td', bl.name),
-        ballotAction && el('td', ballotAction(bl)),
+    el('div.table-wrap', el('table.ballots',
+      el('thead', el('tr', el('th.voter', 'Voter'), weighted && el('th.num', 'Debt'), el('th.num', 'Weight'),
+        candidates.map((c) => el(`th.cand${isWinner(c) ? '.won' : ''}`, { title: c.title, scope: 'col' }, cover(c), el('span', c.title))))),
+      el('tbody', ballots.map((bl) => el('tr',
+        el('th.voter', { scope: 'row', title: bl.name }, who(bl.name), ballotAction && ballotAction(bl)),
         weighted && el('td.num', fmt(r.debts?.[bl.member_id])),
         el('td.num', fmt(r.weights[bl.member_id])),
-        candidates.map((c) => el('td.num', String(c.id) === String(winnerId) ? el('strong', bl.scores[c.id] ?? 0) : (bl.scores[c.id] ?? 0))))))),
+        candidates.map((c) => { const v = bl.scores[c.id] ?? 0; return el(`td.sc.s${v}${isWinner(c) ? '.won' : ''}`, el('b', v)); })))))),
     weighted ? el('p.muted.small', `β = ${r.params.beta}, decay = ${r.params.decay}, floor = ${r.params.floor}.`, e.closed_at ? ` Closed ${e.closed_at} UTC.` : '') : '',
   ];
 }

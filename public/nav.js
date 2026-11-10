@@ -51,4 +51,11 @@ if (location.pathname.startsWith('/members')) {
     sub.append(a);
   }
   nav.after(sub);
+  // on narrow screens the row scrolls: bring the current page into view and fade the edge while there is more
+  const more = () => sub.classList.toggle('more', sub.scrollLeft + sub.clientWidth < sub.scrollWidth - 4);
+  const cur = sub.querySelector('[aria-current]');
+  if (cur) sub.scrollLeft = cur.offsetLeft - sub.offsetLeft - (sub.clientWidth - cur.offsetWidth) / 2;
+  more();
+  sub.addEventListener('scroll', more, { passive: true });
+  addEventListener('resize', more);
 }

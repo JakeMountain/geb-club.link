@@ -16,7 +16,7 @@
 </nav></header>
 <main id="main"><p class="muted">Loading…</p></main>
 <script type="module">
-import { api, el, bookLinks, getMe } from './app.js';
+import { api, el, bookLinks, getMe, who } from './app.js';
 
 const id = new URLSearchParams(location.search).get('id');
 const main = document.getElementById('main');
@@ -49,11 +49,11 @@ async function load() {
   }
 
   const noteCard = (n) => el('div.card',
-    el('div.small', el('a', { href: `/members/member?id=${n.member_id}` }, el('strong', n.name)), el('span.muted', ` · ${n.updated_at.slice(0, 10)}`)),
-    el('p', { style: 'white-space:pre-wrap; margin:.4rem 0 0' }, n.note));
+    el('div.small', el('a', { href: `/members/member?id=${n.member_id}` }, el('strong', who(n.name))), el('span.muted', ` · ${n.updated_at.slice(0, 10)}`)),
+    el('p.note', n.note));
 
   main.replaceChildren(...[
-    el('p.small', el('a', { href: '/members/' }, '← Members')),
+    el('p.small.back', el('a', { href: '/members/' }, '← Members')),
     el('div.book-head',
       book.cover_url ? el('img.cover', { src: book.cover_url, alt: '', className: book.cover_url.endsWith('#crop') ? 'cover crop' : 'cover' }) : '',
       el('div',

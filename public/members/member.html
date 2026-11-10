@@ -16,7 +16,7 @@
 </nav></header>
 <main id="main"><p class="muted">Loading…</p></main>
 <script type="module">
-import { api, el, tierView, TIERS, getMe, thumb, fmt, bookCard } from './app.js';
+import { api, el, tierView, TIERS, getMe, thumb, fmt, bookCard, who } from './app.js';
 
 const id = new URLSearchParams(location.search).get('id');
 const main = document.getElementById('main');
@@ -28,18 +28,19 @@ async function load() {
   const ext = (href, label) => href && el('a', { href, target: '_blank', rel: 'noopener' }, label);
   const ranked = TIERS.some((t) => tiers[t].length);
   main.replaceChildren(...[
-    el('p.small', el('a', { href: '/members/' }, '← Members')),
-    el('h1', m.name),
+    el('p.small.back', el('a', { href: '/members/' }, '← Members')),
+    el('h1', who(m.name)),
     me?.id === m.id ? el('p.small', el('a', { href: '/members/me' }, 'Edit')) : '',
     (m.storygraph_url || m.goodreads_url) ? el('p.links', ext(m.storygraph_url, 'StoryGraph'), ext(m.goodreads_url, 'Goodreads')) : '',
-    st ? el('p.small.muted', `Vote weight ${fmt(st.weight)} · debt ${fmt(st.debt)} · attendance ${fmt(st.attendance)} · elections voted ${st.voted}`) : '',
+    st ? el('div.tiles', [[fmt(st.weight), 'Vote weight'], [fmt(st.debt), 'Debt'], [fmt(st.attendance), 'Attendance'], [st.voted, 'Elections voted']]
+      .map(([v, k]) => el('div.tile', el('div.v', v), el('div.k', k)))) : '',
     m.favorite_book_id ? el('p.book', { style: 'align-items:center' }, thumb(m.favorite_cover), el('span', 'Favorite club book: ', el('a', { href: `/members/book?id=${m.favorite_book_id}` }, el('cite', m.favorite_title)))) : '',
     el('h2', 'Tier list'),
     ranked ? tierView(tiers) : el('p.muted', 'None'),
     el('h2', `Notes (${notes.length})`),
     notes.map((n) => el('div.card',
       el('div.book', thumb(n.cover_url), el('div.meta', el('a', { href: `/members/book?id=${n.book_id}` }, el('cite', n.title)), el('span.muted', n.author ? ` · ${n.author}` : ''),
-      el('p.small', { style: 'white-space:pre-wrap; margin:.4rem 0 0' }, n.note))))),
+      el('p.small.note', n.note))))),
     el('h2', `Want to read (${wantToRead.length})`),
     wantToRead.length ? wantToRead.map((b) => el('div.card', bookCard(b))) : el('p.muted', 'None'),
   ].flat(Infinity).filter((n) => n != null && n !== ''));

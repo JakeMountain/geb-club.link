@@ -16,7 +16,7 @@
 </nav></header>
 <main id="main"><p class="muted">Loading…</p></main>
 <script type="module">
-import { api, el, bookCard, bookSearch, getMe, tierEditor, thumb } from './app.js';
+import { api, el, bookCard, bookSearch, getMe, tierEditor, thumb, who } from './app.js';
 
 const main = document.getElementById('main');
 let me = null;
@@ -45,7 +45,7 @@ function nameSection() {
     el('div', el('label', { htmlFor: 'pf-discord' }, 'Discord handle'), discord),
     el('button', 'Save')), async () => {
     await saveMe({ first_name: first.value, discord: discord.value });
-    document.getElementById('who').textContent = me.name;
+    document.getElementById('who').replaceChildren(who(me.name));
   }, msg, ok)];
 }
 
@@ -217,7 +217,7 @@ async function notesSection(books) {
     el('div.row', el('div', el('label', { htmlFor: 'nt-book' }, 'Write a note on'), pick)),
     notes.length ? notes.map((n) => el('div.card',
       el('div.book', thumb(n.cover_url), el('div.meta', el('a', { href: `/members/book?id=${n.book_id}` }, el('cite', n.title)), el('span.muted', n.author ? ` · ${n.author}` : ''),
-      el('p.small', { style: 'white-space:pre-wrap' }, n.note))))) : ''];
+      el('p.small.note', n.note))))) : ''];
 }
 
 function passwordSection() {
@@ -242,7 +242,7 @@ async function load() {
   }
   const books = await api('/api/books');
   const parts = [
-    el('h1', el('span', { id: 'who' }, me.name)),
+    el('h1', el('span', { id: 'who' }, who(me.name))),
     nameSection(), linksSection(), favoriteSection(books), await tierSection(books),
     await wantSection(), await notesSection(books), exportSection(books), passwordSection(),
   ];

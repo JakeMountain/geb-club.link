@@ -27,7 +27,7 @@
 
 </main>
 <script type="module">
-import { api, el, fmt, pill, getMe } from './app.js';
+import { api, el, fmt, getMe, who as nameOf } from './app.js';
 
 let me = null;
 
@@ -47,7 +47,7 @@ async function renderAccount() {
   const box = document.getElementById('account');
   if (me) {
     box.replaceChildren(
-      el('p', 'Signed in as ', el('strong', me.name), ' · ',
+      el('p', 'Signed in as ', el('strong', nameOf(me.name)), ' · ',
         el('a', { href: '/members/me' }, 'My page'), ' · ',
         el('button.link', { type: 'button', onclick: async () => {
           await api('/api/accounts/logout', { method: 'POST' });
@@ -105,13 +105,13 @@ async function loadMembers() {
   if (!members.length) { box.replaceChildren(el('p.muted', 'None')); return; }
   const st = Object.fromEntries(standings.map((x) => [x.id, x]));
   box.replaceChildren(el('table',
-    el('tr', el('th', 'Member'), el('th', 'Favorite'), el('th', 'Profiles'), el('th.num', 'Debt'), el('th.num', 'Weight')),
+    el('tr', el('th', 'Member'), el('th', 'Favorite'), el('th.hide-sm', 'Profiles'), el('th.num', 'Debt'), el('th.num', 'Weight')),
     [...members].sort((a, b) => (st[b.id]?.weight ?? 0) - (st[a.id]?.weight ?? 0) || a.name.localeCompare(b.name)).map((m) => el('tr',
-      el('td', el('a', { href: `/members/member?id=${m.id}` }, m.name), me?.id === m.id ? el('span.muted.small', ' (you)') : ''),
+      el('td', el('a', { href: `/members/member?id=${m.id}`, style: 'text-decoration:none' }, nameOf(m.name)), me?.id === m.id ? el('span.muted.small', ' (you)') : ''),
       el('td.small', m.favorite_book_id ? el('a', { href: `/members/book?id=${m.favorite_book_id}` }, el('cite', m.favorite_title)) : ''),
-      el('td.small.links',
+      el('td.small.hide-sm', el('div.links',
         m.storygraph_url && el('a', { href: m.storygraph_url, target: '_blank', rel: 'noopener' }, 'StoryGraph'),
-        m.goodreads_url && el('a', { href: m.goodreads_url, target: '_blank', rel: 'noopener' }, 'Goodreads')),
+        m.goodreads_url && el('a', { href: m.goodreads_url, target: '_blank', rel: 'noopener' }, 'Goodreads'))),
       el('td.num', st[m.id] ? fmt(st[m.id].debt) : ''),
       el('td.num', st[m.id] ? el('strong', fmt(st[m.id].weight)) : '')))));
 }

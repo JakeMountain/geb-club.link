@@ -56,10 +56,7 @@
   .scale { display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: var(--muted); margin-top: .6rem; }
   .scale .bar { height: 10px; width: 10rem; border-radius: 4px; background: linear-gradient(to right, color-mix(in oklab, var(--accent) 8%, var(--card)), var(--accent)); }
 
-  .tip { position: fixed; z-index: 50; pointer-events: none; background: var(--ink); color: var(--paper); font-size: .82rem; line-height: 1.35;
-    padding: .4rem .6rem; border-radius: 6px; max-width: 18rem; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
-  .tip[hidden] { display: none; }
-  @media (max-width: 640px) { table.books .hide-sm { display: none; } .twins { font-size: .62rem; } }
+  @media (max-width: 640px) { .twins { font-size: .62rem; } }
 </style>
 </head>
 <body>

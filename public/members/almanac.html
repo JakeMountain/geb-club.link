@@ -7,11 +7,6 @@
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="/favicon.svg">
 <style>
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .8rem; margin: 1rem 0 .5rem; }
-  .tile { border-top: 2px solid var(--accent); padding-top: .4rem; }
-  .tile .v { font-size: 1.7rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
-  .tile .k { color: var(--muted); font-size: .82rem; }
-
   svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
   svg.chart .grid { stroke: var(--rule); stroke-width: 1; }
   svg.chart .axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -21,7 +16,7 @@
 
   /* the stack: thickness is page count */
   .stack { display: flex; flex-direction: column-reverse; align-items: center; margin: 1rem auto 0; padding-bottom: 6px; max-width: 360px; }
-  .stack .bk { height: var(--t); width: var(--w); background: var(--c); color: var(--tc); border-radius: 2px; margin-left: var(--x);
+  .stack .bk { height: var(--t); width: var(--w); max-width: calc(100% - 28px); background: var(--c); color: var(--tc); border-radius: 2px; margin-left: var(--x);
     display: flex; align-items: center; justify-content: space-between; padding: 0 .5rem; font-size: clamp(.55rem, calc(var(--t) * .55), .78rem);
     white-space: nowrap; overflow: hidden; box-shadow: inset 0 -1px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.15); cursor: default; }
   .stack .bk span:first-child { overflow: hidden; text-overflow: ellipsis; font-style: italic; }
@@ -59,11 +54,9 @@
   .quiz .opts button { background: none; padding: 0; border: 2px solid transparent; border-radius: 4px; width: 74px; }
   .quiz .opts button img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; border-radius: 2px; }
   .quiz .opts button.right { border-color: var(--good); }
-  .quiz .opts button.wrong { border-color: #b3261e; opacity: .6; }
+  .quiz .opts button.wrong { border-color: var(--bad); opacity: .6; }
   .quiz .fb { min-height: 1.5rem; margin: .6rem 0; }
 
-  .tip { position: fixed; z-index: 50; pointer-events: none; background: var(--ink); color: var(--paper); font-size: .82rem; line-height: 1.35; padding: .35rem .55rem; border-radius: 6px; max-width: 18rem; }
-  .tip[hidden] { display: none; }
   .src { color: var(--muted); font-size: .78rem; margin-top: 2.5rem; }
 </style>
 </head>
@@ -144,9 +137,10 @@ $('tiles').append(
 );
 
 // ---------------------------------------------------------------- written vs read
-{
+// Drawn at the width it is shown at, so labels stay readable on a phone.
+const drawYears = (W) => {
   // most books are recent; anything older than 1960 sits in a band below a break in the axis
-  const W = 760, H = 360, L = 44, R = 12, T = 16, B = 34, BAND = 34;
+  const H = Math.round(Math.max(300, Math.min(420, W * 0.5))), L = 44, R = 12, T = 16, B = 34, BAND = 34;
   const y0 = 1960, y1 = 2030;
   const x = (pos) => L + ((pos - 1) / (N - 1)) * (W - L - R);
   const y = (yr) => (yr < y0 ? H - B - BAND / 2 + 4 : T + (1 - (yr - y0) / (y1 - y0)) * (H - T - B - BAND));
@@ -174,7 +168,11 @@ $('tiles').append(
   for (const b of [oldest, newest]) {
     S('text', { x: x(b.position) + (b.position > N / 2 ? -12 : 12), y: y(b.year) + 4, 'text-anchor': b.position > N / 2 ? 'end' : 'start', class: 'lbl', 'paint-order': 'stroke', stroke: 'var(--paper)', 'stroke-width': 4 }, svg).textContent = `${b.title}, ${b.year}`;
   }
-  $('years').append(svg);
+  $('years').replaceChildren(svg);
+};
+{
+  let drawn = 0;
+  new ResizeObserver(() => { const w = Math.round($('years').clientWidth); if (w && w !== drawn) { drawn = w; drawYears(w); } }).observe($('years'));
 }
 
 // ---------------------------------------------------------------- tags (members add them; click a dot to tag a book)

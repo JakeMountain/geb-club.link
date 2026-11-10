@@ -30,6 +30,12 @@ export function el(spec, attrs = {}, ...children) {
 
 export const fmt = (x, d = 2) => (x == null ? '–' : Number(x).toFixed(d).replace(/\.?0+$/, '') || '0');
 
+/** "First (@handle)" as a name with a quieter handle. */
+export function who(name) {
+  const m = /^(.*?) \((@[^)]+)\)$/.exec(name ?? '');
+  return m ? el('span.who', m[1], ' ', el('span.handle', m[2])) : el('span.who', name ?? '');
+}
+
 export const coverUrl = (id, size = 'M') => (id ? `https://covers.openlibrary.org/b/id/${id}-${size}.jpg` : null);
 
 /** Small cover image (or an empty placeholder of the same size). */

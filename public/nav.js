@@ -13,10 +13,10 @@ function setMyPage(signedIn) {
   nav.querySelector('a[href="/members/"]').after(link);
 }
 
-// Sign-out button, next to "My page", on every members page.
+// Sign-out button, next to "My page", on every page while signed in.
 function setSignOut(signedIn) {
   let btn = nav.querySelector('#logout');
-  if (!signedIn || !location.pathname.startsWith('/members')) { btn?.remove(); return; }
+  if (!signedIn) { btn?.remove(); return; }
   if (btn) return;
   btn = document.createElement('button');
   btn.className = 'link small';

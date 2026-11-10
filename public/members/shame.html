@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hall of shame · GEB Club</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.svg">
+</head>
+<body>
+<header class="site"><nav>
+  <a class="brand" href="/" aria-label="GEB Club"><canvas aria-hidden="true"></canvas></a>
+  <a href="/history">History</a>
+  <a href="/voting">How we vote</a>
+  <a href="/members/">Members</a>
+</nav></header>
+<main>
+  <h1>Hall of shame</h1>
+  <p class="muted">Feature requests the bot declined.</p>
+  <div id="list"><p class="muted">Loading…</p></div>
+</main>
+<script type="module">
+import { el } from './app.js';
+
+const box = document.getElementById('list');
+
+async function load() {
+  let items = [];
+  try {
+    const r = await fetch('/members/shame.json');
+    if (r.ok) items = await r.json();
+  } catch {}
+  if (!Array.isArray(items) || !items.length) {
+    box.replaceChildren(el('p.muted', 'Nothing has been declined yet.'));
+    return;
+  }
+  const sorted = [...items].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  box.replaceChildren(...sorted.map((x) => el('div.card',
+    el('h3', x.title),
+    el('p.muted.small', x.date),
+    el('p', x.reason))));
+}
+
+load().catch(() => box.replaceChildren(el('p.muted', 'Nothing has been declined yet.')));
+</script>
+<script src="/nav.js" defer></script>
+</body>
+</html>

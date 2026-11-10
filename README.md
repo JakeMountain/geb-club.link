@@ -75,6 +75,8 @@ The Discord app needs the Message Content intent and, in the channel, View Chann
 
 Progress is in `bot/state.json`: a bookmark per channel and every request with its verdict. To have a declined request built, set its `status` to `queued`. Delete the file to start over.
 
+Declined requests also go to `public/members/shame.json`, the data for the hall of shame page. The bot rewrites that file from `bot/state.json` on the branch `bot/hall-of-shame` and keeps one PR open for it until merged. Entries have a title, a reason and a date, and no names.
+
 Whoever can post in the channel can steer what code gets written, and `npm test` runs that code on this machine. The builder has no network, git or other commands, and works in a clean checkout without the secret files. Review each PR before merging.
 
 ## Pull requests

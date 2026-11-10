@@ -13,19 +13,32 @@ function setMyPage(signedIn) {
   nav.querySelector('a[href="/members/"]').after(link);
 }
 
+// Sign-out button, next to "My page", on every members page.
+function setSignOut(signedIn) {
+  let btn = nav.querySelector('#logout');
+  if (!signedIn || !location.pathname.startsWith('/members')) { btn?.remove(); return; }
+  if (btn) return;
+  btn = document.createElement('button');
+  btn.className = 'link small';
+  btn.id = 'logout';
+  btn.textContent = 'Sign out';
+  btn.onclick = () => import('/members/app.js').then((m) => m.logout());
+  nav.append(btn);
+}
+
 fetch('/api/me', { credentials: 'same-origin' })
   .then((r) => (r.ok ? r.json() : { me: null }))
-  .then((r) => setMyPage(!!r.me))
+  .then((r) => { setMyPage(!!r.me); setSignOut(!!r.me); })
   .catch(() => {});
 
-addEventListener('geb:account', (e) => setMyPage(!!e.detail));
+addEventListener('geb:account', (e) => { setMyPage(!!e.detail); setSignOut(!!e.detail); });
 
 // The brand is the trip-let: a block whose shadows spell G, E and B, turning slowly.
 const brand = document.querySelector('header.site .brand canvas');
 if (brand) import("/triplet.js").then((m) => m.mountTriplet(brand, { interactive: false, zoom: 1.1 })).catch(() => {});
 
 // A second row on the members pages.
-const SUB = [['/members/current', 'Current book'], ['/members/tiers', 'Club tier list'], ['/members/taste', 'Taste map'], ['/members/almanac', 'Almanac'], ['/members/gallery', 'Print gallery']];
+const SUB = [['/members/current', 'Current book'], ['/members/tiers', 'Club tier list'], ['/members/taste', 'Taste map'], ['/members/almanac', 'Almanac'], ['/members/gallery', 'Print gallery'], ['/members/shame', 'Hall of shame']];
 if (location.pathname.startsWith('/members')) {
   const here = location.pathname.replace(/\.html$/, '');
   const sub = document.createElement('nav');

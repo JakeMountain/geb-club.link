@@ -1,0 +1,22 @@
+[
+  {
+    "title": "Document/confirm debt-weighted STAR happiness formula",
+    "reason": "Already implemented exactly as described in src/tally.js's happiness()/applyRound() (stake = (hi-lo)/5, happiness measured from lo) — this reads as explaining the existing design rather than requesting a change.",
+    "date": "2026-11-10"
+  },
+  {
+    "title": "Remove login gate from the almanac page",
+    "reason": "The almanac's tag feature shows which member tagged each book and calls the members-only /api/tags endpoint, so ungating it as-is would leak member names and break for unauthenticated visitors — not a small safe change without reworking the tags section.",
+    "date": "2026-11-10"
+  },
+  {
+    "title": "Add short, spoiler-free one-to-three-sentence book descriptions",
+    "reason": "The scope question went unanswered, and producing accurate neutral descriptions at this quality bar is an editorial/content task (or would need a paid LLM service) rather than a small code change the site can build on its own.",
+    "date": "2026-11-10"
+  },
+  {
+    "title": "Line graph of nominated/picked authors' sex over time",
+    "reason": "No code changes. I did not build \"a line graph showing picked authors' sex over time.\"",
+    "date": "2026-11-10"
+  }
+]

@@ -341,6 +341,44 @@ async function build(req) {
   }
 }
 
+// ---------- hall of shame ----------
+
+// The requests the bot turned down, kept as a data file for /members/shame.
+// The file is rewritten from bot/state.json on one rolling branch, so there is
+// at most one open PR for it and it never conflicts with itself.
+const SHAME_FILE = 'public/members/shame.json';
+const SHAME_BRANCH = 'bot/hall-of-shame';
+
+const firstParagraph = (text) =>
+  String(text || '').split('\n').filter((l) => !l.startsWith('#')).join('\n').trim()
+    .split(/\n\s*\n/)[0].replace(/\s+/g, ' ').slice(0, 300);
+
+function updateShame(state) {
+  const entries = state.requests
+    .filter((r) => r.status === 'declined' || r.status === 'not-built')
+    .map((r) => ({ title: r.title, reason: firstParagraph(r.reason), date: r.at.slice(0, 10) }));
+  const want = JSON.stringify(entries, null, 2);
+  const committed = (ref) => { try { return git(['show', `${ref}:${SHAME_FILE}`]); } catch { return null; } };
+  if (committed(`origin/${BASE}`) === want) return;
+  try { git(['fetch', '--quiet', 'origin', SHAME_BRANCH]); if (committed('FETCH_HEAD') === want) return; } catch {}
+
+  const dir = addWorktree('shame', (d) => ['-B', SHAME_BRANCH, d, `origin/${BASE}`]);
+  try {
+    writeFileSync(join(dir, SHAME_FILE), want + '\n');
+    git(['add', SHAME_FILE], dir);
+    git(['commit', '-m', `Hall of shame: ${entries.length} declined request(s)`], dir);
+    git(['push', '--force', '-u', 'origin', SHAME_BRANCH], dir);
+    const open = run('gh', ['pr', 'list', '--head', SHAME_BRANCH, '--state', 'open', '--json', 'url', '--jq', '.[0].url // ""'], dir);
+    const pr = open || run('gh', ['pr', 'create', '--base', BASE, '--head', SHAME_BRANCH,
+      '--title', 'Hall of shame: update declined requests',
+      '--body', `Rewrites \`${SHAME_FILE}\` with every request the feature request bot has declined so far. The bot keeps this one PR up to date until it is merged.`], dir).split('\n').at(-1);
+    log(`Hall of shame: ${entries.length} entries, ${pr}`);
+  } finally {
+    removeWorktree(dir);
+    try { git(['branch', '-D', SHAME_BRANCH]); } catch {}
+  }
+}
+
 // ---------- main ----------
 
 const loadState = () =>
@@ -375,7 +413,7 @@ async function scan() {
         log(`  ${req.pr}`);
         if (REPLY) {
           await discord('POST', `/channels/${req.channelId}/messages`, {
-            content: `Opened a PR for this: ${req.pr}`,
+            content: `PR opened: ${req.title}\n${req.pr}`,
             flags: 4, // no link preview
             message_reference: { message_id: req.messageIds[0], fail_if_not_exists: false },
             allowed_mentions: { parse: [], replied_user: false },
@@ -390,6 +428,7 @@ async function scan() {
     }
     saveState(state);
   }
+  try { updateShame(state); } catch (e) { log(`Hall of shame update failed: ${e.message}`); }
 }
 
 if (!TOKEN || !CHANNEL) {

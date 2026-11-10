@@ -13,7 +13,6 @@
   <a href="/history">History</a>
   <a href="/voting">How we vote</a>
   <a href="/members/" aria-current="page">Members</a>
-  <button class="link small" id="logout">Sign out</button>
 </nav></header>
 <main class="wide">
   <h1>Members</h1>
@@ -28,9 +27,8 @@
 
 </main>
 <script type="module">
-import { api, el, fmt, logout, getMe } from './app.js';
+import { api, el, fmt, pill, getMe } from './app.js';
 
-document.getElementById('logout').onclick = logout;
 let me = null;
 
 // ---------------------------------------------------------------- account

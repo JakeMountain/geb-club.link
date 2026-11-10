@@ -18,5 +18,15 @@
     "title": "Line graph of nominated/picked authors' sex over time",
     "reason": "No code changes. I did not build \"a line graph showing picked authors' sex over time.\"",
     "date": "2026-11-10"
+  },
+  {
+    "title": "Rewrite the site in enterprise Java",
+    "reason": "Plainly a joke, and a rewrite into Java isn't a change this Cloudflare Pages site could use.",
+    "date": "2026-11-10"
+  },
+  {
+    "title": "Track AI usage and show a tree-planting offset counter",
+    "reason": "The site has no access to the subscription's usage data, and the maintainer confirmed it can't really be tracked, so any number would be made up.",
+    "date": "2026-11-10"
   }
 ]

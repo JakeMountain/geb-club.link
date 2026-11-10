@@ -8,10 +8,9 @@ const here = location.pathname.replace(/\.html$/, '').replace(/^\/members$/, '/m
 // [href, label, other pages that belong under this link, shorter label for the narrowest phones]
 const TOP = [
   ['/members/current', 'Current book', ['/members/election'], 'Current'],
-  ['/history', 'History', ['/members/book']],
   ['/members/', 'Members', ['/members/member', '/enter']],
 ];
-const CLUB = [['/members/tiers', 'Club tier list'], ['/members/taste', 'Taste map'], ['/members/almanac', 'Almanac'], ['/members/gallery', 'Print gallery'], ['/members/shame', 'Hall of shame']];
+const CLUB = [['/history', 'History', ['/members/book']], ['/members/tiers', 'Club tier list'], ['/members/taste', 'Taste map'], ['/members/almanac', 'Almanac'], ['/members/gallery', 'Print gallery'], ['/members/shame', 'Hall of shame']];
 
 function link(href, label, also = [], short) {
   const a = document.createElement('a');
@@ -36,10 +35,10 @@ const club = document.createElement('details');
 club.className = 'menu';
 const summary = document.createElement('summary');
 summary.textContent = 'Club';
-if (CLUB.some(([href]) => href === here)) summary.setAttribute('aria-current', 'true');
+if (CLUB.some(([href, , also = []]) => href === here || also.includes(here))) summary.setAttribute('aria-current', 'true');
 const list = document.createElement('div');
 list.className = 'menu-list';
-for (const [href, label] of CLUB) list.append(link(href, label));
+for (const [href, label, also] of CLUB) list.append(link(href, label, also));
 // the account links again, at the bottom of the menu; shown only on phones
 const menuAccount = document.createElement('div');
 menuAccount.className = 'menu-account';

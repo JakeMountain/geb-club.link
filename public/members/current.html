@@ -61,7 +61,7 @@ function scheduleView(sections) {
           return el('td', { className: [due && 'meet', d === now && 'today'].filter(Boolean).join(' '),
             title: due ? due.map((s) => `${s.n}. ${sectionLabel(s)}`).join('\n') : null },
           el('span.d', Number(d.slice(8))), due && due.map((s) => el('span.s', shortLabel(s))));
-        }))))))))),
+        })))))))),
   ];
 }
 

@@ -13,12 +13,25 @@ function setMyPage(signedIn) {
   nav.querySelector('a[href="/members/"]').after(link);
 }
 
+// Sign-out button, next to "My page", on every members page.
+function setSignOut(signedIn) {
+  let btn = nav.querySelector('#logout');
+  if (!signedIn || !location.pathname.startsWith('/members')) { btn?.remove(); return; }
+  if (btn) return;
+  btn = document.createElement('button');
+  btn.className = 'link small';
+  btn.id = 'logout';
+  btn.textContent = 'Sign out';
+  btn.onclick = () => import('/members/app.js').then((m) => m.logout());
+  nav.append(btn);
+}
+
 fetch('/api/me', { credentials: 'same-origin' })
   .then((r) => (r.ok ? r.json() : { me: null }))
-  .then((r) => setMyPage(!!r.me))
+  .then((r) => { setMyPage(!!r.me); setSignOut(!!r.me); })
   .catch(() => {});
 
-addEventListener('geb:account', (e) => setMyPage(!!e.detail));
+addEventListener('geb:account', (e) => { setMyPage(!!e.detail); setSignOut(!!e.detail); });
 
 // The brand is the trip-let: a block whose shadows spell G, E and B, turning slowly.
 const brand = document.querySelector('header.site .brand canvas');

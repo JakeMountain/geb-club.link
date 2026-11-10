@@ -149,3 +149,6 @@ main.wide { max-width: 980px; }
 /* covers marked #crop: scans with extra margin, trimmed to the 2:3 book shape */
 .shelf .cover-wrap img.crop { width: 100%; height: 100%; object-fit: cover; }
 .book-head .cover.crop { aspect-ratio: 2 / 3; object-fit: cover; }
+
+/* keep the line breaks members type into a pitch */
+.pitch { white-space: pre-line; }

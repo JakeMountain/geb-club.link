@@ -54,7 +54,7 @@ export function bookCard(b, extra = []) {
     el('div.meta',
       el('div.title', b.title, b.year ? el('span.muted', ` (${b.year})`) : ''),
       b.author && el('div.muted', b.author),
-      b.pitch && el('p.small', b.pitch),
+      b.pitch && el('p.small.pitch', b.pitch),
       bookLinks(b),
       extra));
 }

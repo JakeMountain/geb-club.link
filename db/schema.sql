@@ -1,4 +1,5 @@
 -- GEB club schema (Cloudflare D1 / SQLite)
+DROP TABLE IF EXISTS reading_sections;
 DROP TABLE IF EXISTS prints;
 DROP TABLE IF EXISTS book_tags;
 DROP TABLE IF EXISTS tags;
@@ -143,3 +144,15 @@ CREATE TABLE prints (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX prints_member ON prints (member_id);
+
+-- reading schedule for a book (/members/current), entered by admins
+CREATE TABLE reading_sections (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books_read(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  unit TEXT NOT NULL DEFAULT 'chapter' CHECK (unit IN ('chapter', 'page')),
+  start_at TEXT NOT NULL,  -- free text: "1", "Prologue", "121"
+  end_at TEXT NOT NULL,
+  due_date TEXT NOT NULL,  -- YYYY-MM-DD, the meeting it should be finished by
+  UNIQUE (book_id, position)
+);

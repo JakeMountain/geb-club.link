@@ -6,6 +6,24 @@
 <title>Current book · GEB Club</title>
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="/favicon.svg">
+<style>
+.sched td.due { white-space: nowrap; }
+.sched tr.past td { color: var(--muted); }
+.months { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1rem 1.5rem; margin: 1rem 0; }
+.month h3 { margin: 0 0 .4rem; }
+.month table { table-layout: fixed; font-size: .85rem; }
+.month th, .month td { padding: .25rem .2rem; text-align: center; border-bottom: 0; }
+.month th { font-size: .68rem; }
+.month td { height: 3.1rem; vertical-align: top; border-radius: 6px; }
+.month td .d { display: block; font-variant-numeric: tabular-nums; }
+.month td.today .d { font-weight: 700; color: var(--accent); }
+.month td.meet { background: var(--accent-soft); }
+.month td.meet .d { font-weight: 700; }
+.month td .s { display: block; font-size: .64rem; line-height: 1.15; overflow-wrap: anywhere; }
+.sched-edit td { vertical-align: middle; padding: .3rem .3rem; }
+.sched-edit input.r { width: 5rem; }
+.sched-edit input[type=date] { width: 10rem; }
+</style>
 </head>
 <body>
 <header class="site"><nav>
@@ -16,8 +34,108 @@
 <main class="wide" id="main"><p class="muted">Loading…</p></main>
 <script type="module">
 import { api, el, pill, bookLinks, getMe } from './app.js';
+import { addDays, nextMonday, today, splitPages, sectionLabel, formatDate, calendarMonths } from './schedule.js';
 
 const main = document.getElementById('main');
+
+// ---------------------------------------------------------------- reading schedule
+const shortLabel = (s) => `${s.unit === 'page' ? 'pp.' : 'Ch.'} ${s.start_at === s.end_at ? s.start_at : `${s.start_at}–${s.end_at}`}`;
+
+function scheduleView(sections) {
+  if (!sections.length) return [el('p.muted', 'No schedule yet.')];
+  const now = today(), year = now.slice(0, 4);
+  const byDate = {};
+  sections.forEach((s, i) => (byDate[s.due_date] ??= []).push({ ...s, n: i + 1 }));
+  return [
+    el('div.table-wrap', el('table.sched',
+      el('thead', el('tr', el('th.num', '#'), el('th', 'Read'), el('th', 'Finish by'))),
+      el('tbody', sections.map((s, i) => el('tr', { className: s.due_date < now ? 'past' : '' },
+        el('td.num', i + 1), el('td', sectionLabel(s)), el('td.due', formatDate(s.due_date, year))))))),
+    el('div.months', calendarMonths(sections.map((s) => s.due_date)).map((m) => el('div.month',
+      el('h3', m.title),
+      el('table',
+        el('thead', el('tr', ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => el('th', d)))),
+        el('tbody', m.weeks.map((w) => el('tr', w.map((d) => {
+          if (!d) return el('td');
+          const due = byDate[d];
+          return el('td', { className: [due && 'meet', d === now && 'today'].filter(Boolean).join(' '),
+            title: due ? due.map((s) => `${s.n}. ${sectionLabel(s)}`).join('\n') : null },
+          el('span.d', Number(d.slice(8))), due && due.map((s) => el('span.s', shortLabel(s))));
+        }))))))))),
+  ];
+}
+
+function scheduleEditor(book, sections, onSaved) {
+  let rows = sections.map((s) => ({ ...s }));
+  const pages = el('input', { id: 'rs-pages', type: 'number', min: 1, inputMode: 'numeric', style: 'width:100%' });
+  const first = el('input', { id: 'rs-first', type: 'date', value: rows[0]?.due_date || nextMonday(today()), style: 'width:100%' });
+  const per = el('input', { id: 'rs-per', type: 'number', min: 1, value: 125, inputMode: 'numeric', style: 'width:100%' });
+  const body = el('tbody');
+  const msg = el('p.small', { role: 'status' });
+
+  const render = () => body.replaceChildren(...rows.map((r, i) => {
+    const input = (key, attrs) => el('input', { ...attrs, value: r[key], 'aria-label': `Section ${i + 1} ${attrs['aria-label']}`, oninput: (e) => { r[key] = e.target.value; } });
+    const unit = el('select', { 'aria-label': `Section ${i + 1} unit`, onchange: (e) => { r.unit = e.target.value; } },
+      el('option', { value: 'chapter', selected: r.unit === 'chapter' }, 'Chapters'),
+      el('option', { value: 'page', selected: r.unit === 'page' }, 'Pages'));
+    return el('tr',
+      el('td.num', i + 1),
+      el('td', unit),
+      el('td', input('start_at', { className: 'r', 'aria-label': 'from' })),
+      el('td', input('end_at', { className: 'r', 'aria-label': 'to' })),
+      el('td', input('due_date', { type: 'date', 'aria-label': 'finish by' })),
+      el('td', el('button.link', { type: 'button', onclick: () => { rows.splice(i, 1); render(); } }, 'Remove')));
+  }));
+
+  const split = el('button', { type: 'button', onclick: () => {
+    const made = splitPages(Number(pages.value), first.value || nextMonday(today()), Number(per.value) || 125);
+    if (!made.length) { msg.className = 'small error'; msg.textContent = 'Enter the page count.'; return; }
+    rows = made; msg.textContent = ''; render();
+  } }, 'Fill in');
+
+  const add = el('button.secondary', { type: 'button', onclick: () => {
+    const last = rows.at(-1);
+    const next = last && /^\d+$/.test(last.end_at) ? String(Number(last.end_at) + 1) : '';
+    rows.push({ unit: last?.unit || 'chapter', start_at: next, end_at: '', due_date: last?.due_date ? addDays(last.due_date, 7) : first.value });
+    render();
+  } }, 'Add section');
+
+  const save = el('button', { type: 'button', onclick: async () => {
+    msg.className = 'small'; msg.textContent = 'Saving…';
+    try {
+      const { sections: saved } = await api(`/api/books/${book.id}/schedule`, { method: 'PUT', body: { sections: rows } });
+      rows = saved.map((s) => ({ ...s }));
+      render();
+      msg.className = 'small ok'; msg.textContent = 'Saved.';
+      onSaved(saved);
+    } catch (err) { msg.className = 'small error'; msg.textContent = err.message; }
+  } }, 'Save');
+
+  render();
+  return el('details.card',
+    el('summary', 'Edit schedule'),
+    el('p.small.muted', 'Split by page count, then change the ranges to chapter breaks.'),
+    el('div.row',
+      el('div', el('label', { htmlFor: 'rs-pages' }, 'Pages'), pages),
+      el('div', el('label', { htmlFor: 'rs-per' }, 'Pages per meeting'), per),
+      el('div', el('label', { htmlFor: 'rs-first' }, 'First meeting'), first),
+      split),
+    el('div.table-wrap', el('table.sched-edit',
+      el('thead', el('tr', el('th.num', '#'), el('th', 'Unit'), el('th', 'From'), el('th', 'To'), el('th', 'Finish by'), el('th'))),
+      body)),
+    el('div.actions', add, save),
+    msg);
+}
+
+function scheduleSection(book, me) {
+  const box = el('div', el('p.muted', 'Loading…'));
+  const editor = el('div');
+  api(`/api/books/${book.id}/schedule`).then(({ sections }) => {
+    box.replaceChildren(...scheduleView(sections));
+    if (me?.is_admin) editor.replaceChildren(scheduleEditor(book, sections, (saved) => box.replaceChildren(...scheduleView(saved))));
+  }).catch((err) => box.replaceChildren(el('p.error', err.message)));
+  return [el('h2', 'Reading schedule'), box, editor];
+}
 
 function currentBook(book) {
   if (!book) return [el('p.muted', 'None yet.')];
@@ -69,9 +187,11 @@ async function load() {
   const [books, me] = await Promise.all([api('/api/books'), getMe()]);
   const elections = el('div', el('p.muted', 'Loading…'));
   const { box: newElection, method: methodSelect } = newElectionBox(me);
+  const book = books.at(-1);
   main.replaceChildren(
     el('h1', 'Current book'),
-    ...currentBook(books.at(-1)),
+    ...currentBook(book),
+    ...(book ? scheduleSection(book, me) : []),
     el('h2', 'Elections'),
     el('p.small', el('a', { href: '/voting' }, 'How we vote')),
     elections,

@@ -25,7 +25,7 @@ const brand = document.querySelector('header.site .brand canvas');
 if (brand) import("/triplet.js").then((m) => m.mountTriplet(brand, { interactive: false, zoom: 1.1 })).catch(() => {});
 
 // A second row on the members pages.
-const SUB = [['/members/tiers', 'Club tier list'], ['/members/taste', 'Taste map'], ['/members/almanac', 'Almanac'], ['/members/gallery', 'Print gallery']];
+const SUB = [['/members/tiers', 'Club tier list'], ['/members/taste', 'Taste map'], ['/members/almanac', 'Almanac'], ['/members/gallery', 'Print gallery'], ['/members/shame', 'Hall of shame']];
 if (location.pathname.startsWith('/members')) {
   const here = location.pathname.replace(/\.html$/, '');
   const sub = document.createElement('nav');

@@ -173,6 +173,38 @@ route('PATCH', '/api/me', async ({ env, db, me, body }) => {
   return json({ me: publicMember(m) }, 200, { 'Set-Cookie': await accountCookie(env, m) });
 });
 
+// ------------------------------------------------------------ print gallery
+
+const MAX_PRINT_BYTES = 1_500_000; // D1 rows top out around 2 MB, same limit as cover_cache
+
+function decodeBase64(b64) {
+  const bin = atob(b64);
+  const data = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) data[i] = bin.charCodeAt(i);
+  return data;
+}
+
+route('GET', '/api/prints', async ({ db }) =>
+  json((await db.prepare(`SELECT p.id, p.member_id, m.name, p.created_at FROM prints p
+    JOIN members m ON m.id = p.member_id ORDER BY p.created_at DESC, p.id DESC`).all()).results));
+
+route('POST', '/api/me/prints', async ({ db, me, body }) => {
+  const type = str(body.content_type, 40);
+  if (!/^image\/(png|jpeg)$/.test(type)) return bad('image must be a PNG or JPEG');
+  if (typeof body.data !== 'string' || !body.data) return bad('image data required');
+  let data;
+  try { data = decodeBase64(body.data); } catch { return bad('invalid image data'); }
+  if (!data.length || data.length > MAX_PRINT_BYTES) return bad('image is too large');
+  const r = await db.prepare('INSERT INTO prints (member_id, content_type, data) VALUES (?, ?, ?) RETURNING id, member_id, created_at')
+    .bind(me.id, type, data).first();
+  return json({ ...r, name: me.name }, 201);
+});
+
+route('DELETE', '/api/me/prints/:id', async ({ db, me, params }) => {
+  await db.prepare('DELETE FROM prints WHERE id = ? AND member_id = ?').bind(params.id, me.id).run();
+  return json({ ok: true });
+});
+
 // ------------------------------------------------------------ member center
 
 // Profile links must point at the real sites (also keeps javascript: URLs out).

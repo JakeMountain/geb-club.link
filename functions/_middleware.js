@@ -1,12 +1,13 @@
 import { isMember } from '../src/auth.js';
 
-// Everything under /members and /api is members-only, except login and /api/public.
+// Everything under /members, /prints and /api is members-only, except login and /api/public.
+// (/prints holds saved print-gallery images, which can be camera photos.)
 const OPEN = ['/api/login', '/api/logout'];
 
 export async function onRequest({ request, env, next }) {
   const url = new URL(request.url);
   const path = url.pathname;
-  const gated = (path === '/members' || path.startsWith('/members/') ||
+  const gated = (path === '/members' || path.startsWith('/members/') || path.startsWith('/prints/') ||
     (path.startsWith('/api/') && !path.startsWith('/api/public/'))) && !OPEN.includes(path);
   if (!gated || await isMember(request, env)) {
     const res = await next();

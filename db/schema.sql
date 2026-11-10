@@ -1,4 +1,5 @@
 -- GEB club schema (Cloudflare D1 / SQLite)
+DROP TABLE IF EXISTS prints;
 DROP TABLE IF EXISTS book_tags;
 DROP TABLE IF EXISTS tags;
 DROP TABLE IF EXISTS cover_cache;
@@ -132,3 +133,13 @@ CREATE TABLE book_tags (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (book_id, tag_id)
 );
+
+-- images members save from the print gallery (/members/gallery), shown to the whole club
+CREATE TABLE prints (
+  id INTEGER PRIMARY KEY,
+  member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  content_type TEXT NOT NULL,
+  data BLOB NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX prints_member ON prints (member_id);

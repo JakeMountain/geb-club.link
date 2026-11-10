@@ -11,7 +11,6 @@
 <header class="site"><nav>
   <a class="brand" href="/" aria-label="GEB Club"><canvas aria-hidden="true"></canvas></a>
   <a href="/history">History</a>
-  <a href="/voting">How we vote</a>
   <a href="/members/">Members</a>
 </nav></header>
 <main id="main"><p class="muted">Loading…</p></main>
@@ -34,6 +33,7 @@ async function load() {
     (m.storygraph_url || m.goodreads_url) ? el('p.links', ext(m.storygraph_url, 'StoryGraph'), ext(m.goodreads_url, 'Goodreads')) : '',
     st ? el('div.tiles', [[fmt(st.weight), 'Vote weight'], [fmt(st.debt), 'Debt'], [fmt(st.attendance), 'Attendance'], [st.voted, 'Elections voted']]
       .map(([v, k]) => el('div.tile', el('div.v', v), el('div.k', k)))) : '',
+    st ? el('p.small', el('a', { href: '/voting' }, 'How debt and weight work')) : '',
     m.favorite_book_id ? el('p.book', { style: 'align-items:center' }, thumb(m.favorite_cover), el('span', 'Favorite club book: ', el('a', { href: `/members/book?id=${m.favorite_book_id}` }, el('cite', m.favorite_title)))) : '',
     el('h2', 'Tier list'),
     ranked ? tierView(tiers) : el('p.muted', 'None'),

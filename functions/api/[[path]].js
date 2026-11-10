@@ -208,6 +208,25 @@ route('DELETE', '/api/me/prints/:id', async ({ db, me, params }) => {
   return json({ ok: true });
 });
 
+// ------------------------------------------------------------ hall of shame votes
+
+// Counts only, no names; plus which ones you voted for. Keyed by the title in shame.json.
+const shameVotes = async (db, me) => ({
+  counts: Object.fromEntries((await db.prepare('SELECT title, COUNT(*) AS n FROM shame_votes GROUP BY title').all()).results.map((r) => [r.title, r.n])),
+  mine: me ? (await db.prepare('SELECT title FROM shame_votes WHERE member_id = ?').bind(me.id).all()).results.map((r) => r.title) : [],
+});
+
+route('GET', '/api/shame/votes', async ({ db, me }) => json(await shameVotes(db, me)));
+
+// { title, vote: true | false }
+route('PUT', '/api/shame/votes', async ({ db, me, body }) => {
+  const title = str(body.title, 300);
+  if (!title) return bad('title required');
+  await db.prepare(body.vote === false ? 'DELETE FROM shame_votes WHERE title = ? AND member_id = ?'
+    : 'INSERT OR IGNORE INTO shame_votes (title, member_id) VALUES (?, ?)').bind(title, me.id).run();
+  return json(await shameVotes(db, me));
+});
+
 // ------------------------------------------------------------ member center
 
 // Profile links must point at the real sites (also keeps javascript: URLs out).

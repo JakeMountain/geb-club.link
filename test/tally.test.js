@@ -114,7 +114,7 @@ test('trace follows one voter through each round', () => {
   assert.equal(steps[1].voted, true);
   assert.ok(steps[1].debt > 0);            // y lost round one, so is owed
   assert.equal(steps[2].voted, false);
-  assert.ok(Math.abs(steps[2].debt - steps[1].debt * DEBT_PARAMS.decay) < 1e-9);  // sat out: debt only decays
+  assert.ok(Math.abs(steps[2].debt - steps[1].debt) < 1e-9);  // sat out: debt carries over unchanged
   const end = replay(history, start);
   assert.ok(Math.abs(steps[2].debt - end.debt.y) < 1e-9);
 });

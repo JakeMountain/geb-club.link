@@ -284,7 +284,7 @@ function tallyView(e, candidates, ballots, r, winnerId, winnerLabel, ballotActio
         el('div.mid.muted.small', `No preference ${fmt(r.runoff.noPreference)}`))] : '',
 
     ballots && el('h2', `Ballots (${ballots.length})`),
-    ballots && el('div.table-wrap', el('table.ballots',
+    ballots && el('div.table-wrap.breakout', el('table.ballots',
       el('thead', el('tr', el('th.voter', 'Voter'), weighted && el('th.num', 'Debt'), el('th.num', 'Weight'),
         candidates.map((c) => el(`th.cand${isWinner(c) ? '.won' : ''}`, { title: c.title, scope: 'col' }, cover(c), el('span', c.title))))),
       el('tbody', ballots.map((bl) => el('tr',
@@ -292,7 +292,7 @@ function tallyView(e, candidates, ballots, r, winnerId, winnerLabel, ballotActio
         weighted && el('td.num', fmt(r.debts?.[bl.member_id])),
         el('td.num', fmt(r.weights[bl.member_id])),
         candidates.map((c) => { const v = bl.scores[c.id] ?? 0; return el(`td.sc.s${v}${isWinner(c) ? '.won' : ''}`, el('b', v)); })))))),
-    weighted ? el('p.muted.small', `β = ${r.params.beta}, ${r.params.decay != null ? `decay = ${r.params.decay}, ` : ''}floor = ${r.params.floor}.`, e.closed_at ? ` Closed ${e.closed_at} UTC.` : '') : '',
+    weighted ? el('p.muted.small', `β = ${r.params.beta}, floor = ${r.params.floor}.`, e.closed_at ? ` Closed ${e.closed_at} UTC.` : '') : '',
   ];
 }
 

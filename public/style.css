@@ -117,6 +117,8 @@ tr > :first-child { padding-left: .15rem; }
 tr > :last-child { padding-right: .15rem; }
 tbody tr:last-child > td, table > tr:last-child > td { border-bottom: 0; }
 .table-wrap { overflow-x: auto; }
+/* A wide table may run past the text column, centered on it, and scrolls only when the window is too narrow. */
+.table-wrap.breakout { width: max-content; min-width: 100%; max-width: calc(100vw - 2 * var(--gutter) - 1rem); margin-left: 50%; transform: translateX(-50%); }
 @media (max-width: 640px) { .hide-sm { display: none !important; } }
 
 /* ---------------------------------------------------------------- boxes */

@@ -6,6 +6,11 @@
 <title>Hall of shame · GEB Club</title>
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="/favicon.svg">
+<style>
+  .shame-head { display: flex; gap: .7rem; align-items: start; justify-content: space-between; }
+  .shame-head h3 { margin: 0; }
+  .shame-head button { flex: 0 0 auto; padding: .2rem .65rem; font-variant-numeric: tabular-nums; }
+</style>
 </head>
 <body>
 <header class="site"><nav>
@@ -15,13 +20,15 @@
 </nav></header>
 <main>
   <h1>Hall of shame</h1>
-  <p class="muted">Feature requests the bot declined.</p>
+  <p class="muted">Feature requests the bot declined. Vote for the ones that deserve a second chance.</p>
+  <p class="muted small" id="msg" role="status"></p>
   <div id="list"><p class="muted">Loading…</p></div>
 </main>
 <script type="module">
-import { el } from './app.js';
+import { api, el, getMe } from './app.js';
 
 const box = document.getElementById('list');
+const msg = document.getElementById('msg');
 
 async function load() {
   let items = [];
@@ -33,11 +40,33 @@ async function load() {
     box.replaceChildren(el('p.muted', 'Nothing has been declined yet.'));
     return;
   }
-  const sorted = [...items].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  box.replaceChildren(...sorted.map((x) => el('div.card',
-    el('h3', x.title),
-    el('p.muted.small', x.date),
-    el('p', x.reason))));
+  const [me, initial] = await Promise.all([getMe().catch(() => null), api('/api/shame/votes').catch(() => ({ counts: {}, mine: [] }))]);
+  let votes = initial;
+
+  const render = () => {
+    const n = (x) => votes.counts[x.title] || 0;
+    const mine = new Set(votes.mine);
+    // Most votes first, then newest.
+    const sorted = [...items].sort((a, b) => n(b) - n(a) || (b.date || '').localeCompare(a.date || ''));
+    box.replaceChildren(...sorted.map((x) => {
+      const voted = mine.has(x.title);
+      const btn = el(`button.small${voted ? '' : '.secondary'}`, {
+        type: 'button', 'aria-pressed': String(voted), disabled: !me,
+        title: me ? (voted ? 'Remove your vote' : 'Vote to give it a second chance') : 'Sign in on the Members page to vote',
+        onclick: async () => {
+          btn.disabled = true;
+          try { votes = await api('/api/shame/votes', { method: 'PUT', body: { title: x.title, vote: !voted } }); msg.textContent = ''; render(); }
+          catch (e) { msg.textContent = e.message; btn.disabled = false; }
+        },
+      }, `▲ ${n(x)}`);
+      return el('div.card',
+        el('div.shame-head', el('h3', x.title), btn),
+        el('p.muted.small', x.date),
+        el('p', x.reason));
+    }));
+  };
+  if (!me) msg.textContent = 'Sign in on the Members page to vote.';
+  render();
 }
 
 load().catch(() => box.replaceChildren(el('p.muted', 'Nothing has been declined yet.')));

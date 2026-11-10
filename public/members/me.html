@@ -111,7 +111,7 @@ async function wantSection() {
     title.value = ''; author.value = ''; render();
   }, msg);
   await render();
-  return [el('h2', 'Want to read'), el('p.muted.small', 'Only you can see this list.'),
+  return [el('h2', 'Want to read'), el('p.muted.small', 'Other members can see this list on your page.'),
     search, el('details', el('summary.small', 'Add by hand'), manual), box];
 }
 

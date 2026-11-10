@@ -27,15 +27,19 @@ async function load() {
   const [data, ms, m] = await Promise.all([api(`/api/elections/${id}`), api('/api/members'), getMe()]);
   members = ms;
   me = m;
-  const { election: e, candidates, ballots, methods } = data;
+  const { election: e, candidates, ballots, methods, live } = data;
   document.title = `${e.title} · GEB Club`;
   const head = [
     el('p.small', el('a', { href: '/members/' }, '← All elections')),
     el('h1', e.title, ' ', pill(e.status)),
-    el('p.muted', methods[e.method] ?? e.method),
+    el('p.muted', methods[e.method] ?? e.method,
+      admin() && e.status !== 'closed' && [' · ', action('Rename', async () => {
+        const title = prompt('Election name', e.title)?.trim();
+        if (title && title !== e.title) await api(`/api/elections/${id}`, { method: 'PATCH', body: { title } });
+      }, '.link.small')]),
   ];
   const body = e.status === 'nominating' ? nominating(e, candidates)
-    : e.status === 'voting' ? await voting(e, candidates, ballots)
+    : e.status === 'voting' ? await voting(e, candidates, ballots, live)
     : results(e, candidates, ballots);
   main.replaceChildren(...[...head, ...body].flat(Infinity).filter((n) => n != null && n !== false && n !== ''));
 }
@@ -47,13 +51,66 @@ const action = (label, fn, cls = '') => el(`button${cls}`, { type: 'button', onc
 
 const signInLink = () => el('p', el('a', { href: '/members/' }, 'Sign in'), ' to take part.');
 
+const admin = () => !!me?.is_admin;
+const memberSelect = (selectedId, attrs = {}) => el('select', attrs,
+  el('option', { value: '' }, 'Nobody'),
+  members.map((m) => el('option', { value: m.id, selected: m.id === selectedId }, m.name)));
+
+// Admins: edit a book's details, swap in another edition from the search, or change who nominated it.
+function editBook(c) {
+  const f = {
+    title: el('input', { id: `e${c.id}-title`, value: c.title, required: true, style: 'width:100%' }),
+    author: el('input', { id: `e${c.id}-author`, value: c.author ?? '', style: 'width:100%' }),
+    year: el('input', { id: `e${c.id}-year`, value: c.year ?? '', inputMode: 'numeric', style: 'width:6rem' }),
+    nominator: memberSelect(c.nominator_id, { id: `e${c.id}-nominator` }),
+    pitch: el('textarea', { id: `e${c.id}-pitch`, value: c.pitch ?? '', rows: 3, style: 'width:100%' }),
+  };
+  const lbl = (k, text) => el('label', { htmlFor: `e${c.id}-${k}` }, text);
+  let edition = {};
+  const picked = el('p.small.muted');
+  const search = bookSearch((book) => {
+    edition = { ol_key: book.ol_key, cover_id: book.cover_id, isbn: book.isbn };
+    f.title.value = book.title; f.author.value = book.author; f.year.value = book.year ?? '';
+    picked.textContent = `Cover and links will come from the ${book.title} record you picked.`;
+  });
+  const msg = el('p.small.error', { role: 'alert' });
+  const form = el('form', search, picked,
+    el('div.row', el('div', lbl('title', 'Title'), f.title), el('div', lbl('author', 'Author'), f.author)),
+    el('div.row', el('div', lbl('year', 'Year'), f.year), el('div', lbl('nominator', 'Nominated by'), f.nominator)),
+    lbl('pitch', 'Pitch'), f.pitch,
+    el('p', el('button', 'Save')), msg);
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const year = f.year.value.trim();
+    try {
+      await api(`/api/elections/${id}/candidates/${c.id}`, { method: 'PATCH', body: {
+        ...edition, title: f.title.value, author: f.author.value, pitch: f.pitch.value,
+        year: year ? Number(year) : null, nominator_id: f.nominator.value ? Number(f.nominator.value) : null } });
+      await load();
+    } catch (err) { msg.textContent = err.message; }
+  });
+  return el('details', el('summary.small', 'Edit'), form);
+}
+
+// Each member sees the books in their own order (so no book always sits first), stable across reloads.
+const hash = (s) => {
+  let h = 2166136261;
+  for (const ch of s) h = Math.imul(h ^ ch.codePointAt(0), 16777619);
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b); h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35); // mix so the last character matters
+  return (h ^ (h >>> 16)) >>> 0;
+};
+const myOrder = (e, candidates) => me
+  ? [...candidates].sort((x, y) => hash(`${e.id}:${me.id}:${x.id}`) - hash(`${e.id}:${me.id}:${y.id}`))
+  : candidates;
+
 // ---------------------------------------------------------------- nominating
 function nominating(e, candidates) {
   const list = [
     el('h2', `Books (${candidates.length})`),
-    candidates.length ? candidates.map((c) => el('div.card', bookCard(c, [
+    candidates.length ? myOrder(e, candidates).map((c) => el('div.card', bookCard(c, [
       c.nominator && el('div.small.muted', `Nominated by ${c.nominator}`),
       me && action('Remove', () => confirm(`Remove ${c.title}?`) && api(`/api/elections/${id}/candidates/${c.id}`, { method: 'DELETE' }), '.link.small'),
+      admin() && editBook(c),
     ]))) : el('p.muted', 'None'),
   ];
   if (!me) return [...list, signInLink()];
@@ -63,6 +120,7 @@ function nominating(e, candidates) {
     title: el('input', { id: 'n-title', required: true, style: 'width:100%' }),
     author: el('input', { id: 'n-author', style: 'width:100%' }),
     pitch: el('textarea', { id: 'n-pitch', rows: 2, style: 'width:100%' }),
+    nominator: admin() ? memberSelect(me.id, { id: 'n-nominator' }) : null,
   };
   let picked = {};
   const preview = el('div');
@@ -80,12 +138,14 @@ function nominating(e, candidates) {
       el('div', el('label', { htmlFor: 'n-title' }, 'Title'), f.title),
       el('div', el('label', { htmlFor: 'n-author' }, 'Author'), f.author)),
     el('label', { htmlFor: 'n-pitch' }, 'Pitch (optional)'), f.pitch,
+    f.nominator && [el('label', { htmlFor: 'n-nominator' }, 'Nominated by'), f.nominator],
     el('p', el('button', 'Add book')), msg);
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     try {
       await api(`/api/elections/${id}/candidates`, { method: 'POST', body: {
-        ...picked, title: f.title.value, author: f.author.value, pitch: f.pitch.value } });
+        ...picked, title: f.title.value, author: f.author.value, pitch: f.pitch.value,
+        ...(f.nominator?.value ? { nominator_id: Number(f.nominator.value) } : {}) } });
       await load();
     } catch (err) { msg.textContent = err.message; }
   });
@@ -103,7 +163,7 @@ function nominating(e, candidates) {
 }
 
 // ---------------------------------------------------------------- voting
-async function voting(e, candidates, ballots) {
+async function voting(e, candidates, ballots, live) {
   const voted = new Set(ballots.map((b) => String(b.member_id)));
   const votedList = [
     el('h2', `Voted (${ballots.length})`),
@@ -114,12 +174,13 @@ async function voting(e, candidates, ballots) {
   const { scores } = await api(`/api/elections/${id}/ballot`);
   const msg = el('p.small.error', { role: 'alert' });
   const form = el('form',
-    candidates.map((c) => el('div.card', bookCard(c, [
+    myOrder(e, candidates).map((c) => el('div.card', bookCard(c, [
       c.nominator && el('div.small.muted', `Nominated by ${c.nominator}`),
       el('div.scores', { role: 'radiogroup', 'aria-label': `Score for ${c.title}` },
         [0, 1, 2, 3, 4, 5].map((s) => el('label',
           el('input', { type: 'radio', name: `c${c.id}`, value: s, checked: scores?.[c.id] === s, required: true }),
           el('span', s)))),
+      admin() && editBook(c),
     ]))),
     el('p', el('button', scores ? 'Update ballot' : 'Submit ballot'),
       scores && [' ', action('Withdraw', async () => {
@@ -142,6 +203,10 @@ async function voting(e, candidates, ballots) {
     el('p.small', 'Voting as ', el('strong', me.name), scores ? el('span.ok', ' · voted') : ''),
     form,
     ...votedList,
+    admin() && [el('h2', 'Count so far'),
+      live ? tallyView(e, candidates, ballots, live, live.winner, 'Winning now',
+        (bl) => action('Remove', () => confirm(`Remove ${bl.name}'s ballot?`) && api(`/api/elections/${id}/ballots/${bl.member_id}`, { method: 'DELETE' }), '.link.small'))
+        : el('p.muted', 'No ballots yet')],
     el('p',
       action('Close voting and count', async () => {
         if (!confirm('Close voting and count? This cannot be undone.')) return;
@@ -152,18 +217,21 @@ async function voting(e, candidates, ballots) {
 }
 
 // ---------------------------------------------------------------- results
-function results(e, candidates, ballots) {
-  const r = e.result;
+const results = (e, candidates, ballots) => tallyView(e, candidates, ballots, e.result, e.winner_id, 'Winner');
+
+// The count: winner, scoring round, runoff and every ballot. Used for closed elections, and for
+// admins while voting is open (ballotAction adds a control to each ballot row).
+function tallyView(e, candidates, ballots, r, winnerId, winnerLabel, ballotAction) {
   const byId = Object.fromEntries(candidates.map((c) => [String(c.id), c]));
   const title = (cid) => byId[cid]?.title ?? '?';
-  const winner = byId[String(e.winner_id)];
+  const winner = byId[String(winnerId)];
   const maxTotal = Math.max(...Object.values(r.totals), 1);
   const [a, b] = r.finalists;
   const weighted = r.method === 'debt-star';
 
   return [
-    el('div.card', el('div.muted.small', 'Winner'), bookCard(winner)),
-    weighted && r.plainStarWinner !== String(e.winner_id)
+    el('div.card', el('div.muted.small', winnerLabel), bookCard(winner)),
+    weighted && r.plainStarWinner !== String(winnerId)
       ? el('p.callout.small', `Plain STAR winner: ${title(r.plainStarWinner)}`) : '',
     r.tiebreaks.map((t) => el('p.callout.small',
       `${t.round === 'runoff' ? 'Runoff' : 'Scoring round'} tie: ${t.tied.map(title).join(', ')}. Broken by ${t.how}.`)),
@@ -182,13 +250,14 @@ function results(e, candidates, ballots) {
 
     el('h2', `Ballots (${ballots.length})`),
     el('div.table-wrap', el('table',
-      el('tr', el('th', 'Voter'), weighted && el('th.num', 'Debt'), el('th.num', 'Weight'), candidates.map((c) => el('th.num', { title: c.title }, c.title.length > 18 ? c.title.slice(0, 16) + '…' : c.title))),
+      el('tr', el('th', 'Voter'), ballotAction && el('th'), weighted && el('th.num', 'Debt'), el('th.num', 'Weight'), candidates.map((c) => el('th.num', { title: c.title }, c.title.length > 18 ? c.title.slice(0, 16) + '…' : c.title))),
       ballots.map((bl) => el('tr',
         el('td', bl.name),
+        ballotAction && el('td', ballotAction(bl)),
         weighted && el('td.num', fmt(r.debts?.[bl.member_id])),
         el('td.num', fmt(r.weights[bl.member_id])),
-        candidates.map((c) => el('td.num', String(c.id) === String(e.winner_id) ? el('strong', bl.scores[c.id] ?? 0) : (bl.scores[c.id] ?? 0))))))),
-    weighted ? el('p.muted.small', `β = ${r.params.beta}, decay = ${r.params.decay}, floor = ${r.params.floor}. Closed ${e.closed_at} UTC.`) : '',
+        candidates.map((c) => el('td.num', String(c.id) === String(winnerId) ? el('strong', bl.scores[c.id] ?? 0) : (bl.scores[c.id] ?? 0))))))),
+    weighted ? el('p.muted.small', `β = ${r.params.beta}, decay = ${r.params.decay}, floor = ${r.params.floor}.`, e.closed_at ? ` Closed ${e.closed_at} UTC.` : '') : '',
   ];
 }
 

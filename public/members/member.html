@@ -16,13 +16,13 @@
 </nav></header>
 <main id="main"><p class="muted">Loading…</p></main>
 <script type="module">
-import { api, el, tierView, TIERS, getMe, thumb, fmt } from './app.js';
+import { api, el, tierView, TIERS, getMe, thumb, fmt, bookCard } from './app.js';
 
 const id = new URLSearchParams(location.search).get('id');
 const main = document.getElementById('main');
 
 async function load() {
-  const [{ member: m, tiers, notes }, me, { members: standings }] = await Promise.all([api(`/api/members/${id}`), getMe(), api('/api/standings')]);
+  const [{ member: m, tiers, notes, wantToRead }, me, { members: standings }] = await Promise.all([api(`/api/members/${id}`), getMe(), api('/api/standings')]);
   const st = standings.find((x) => x.id === m.id);
   document.title = `${m.name} · GEB Club`;
   const ext = (href, label) => href && el('a', { href, target: '_blank', rel: 'noopener' }, label);
@@ -40,6 +40,8 @@ async function load() {
     notes.map((n) => el('div.card',
       el('div.book', thumb(n.cover_url), el('div.meta', el('a', { href: `/members/book?id=${n.book_id}` }, el('cite', n.title)), el('span.muted', n.author ? ` · ${n.author}` : ''),
       el('p.small', { style: 'white-space:pre-wrap; margin:.4rem 0 0' }, n.note))))),
+    el('h2', `Want to read (${wantToRead.length})`),
+    wantToRead.length ? wantToRead.map((b) => el('div.card', bookCard(b))) : el('p.muted', 'None'),
   ].flat(Infinity).filter((n) => n != null && n !== ''));
 }
 

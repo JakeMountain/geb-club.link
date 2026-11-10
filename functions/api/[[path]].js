@@ -5,10 +5,14 @@ import { METHODS, DEBT_PARAMS, replay, tally, debtsFor, weightsFor, attendance }
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers });
 const bad = (msg, status = 400) => json({ error: msg }, status);
 const SIGNED_OUT = () => bad('sign in to your account first', 403);
+// Admin powers only count on an account with a password (a passwordless account is open to the whole club).
+const isAdmin = (m) => !!(m?.is_admin && m.pw_hash);
+const ADMINS_ONLY = () => bad('admins only', 403);
 const publicMember = (m) => m && {
   id: m.id, name: m.name, first_name: m.first_name, discord: m.discord, has_password: !!m.pw_hash, created_at: m.created_at,
-  storygraph_url: m.storygraph_url, goodreads_url: m.goodreads_url, favorite_book_id: m.favorite_book_id,
+  storygraph_url: m.storygraph_url, goodreads_url: m.goodreads_url, favorite_book_id: m.favorite_book_id, is_admin: isAdmin(m),
 };
+const memberExists = async (db, id) => Number.isInteger(id) && !!(await db.prepare('SELECT id FROM members WHERE id = ?').bind(id).first());
 
 // First name and Discord handle are each optional; at least one is required.
 // The display name is "First (@handle)", or whichever one was given.
@@ -317,7 +321,7 @@ route('DELETE', '/api/books/:id/tags/:tag', async ({ db, params }) => {
   return json(await tagsAll(db));
 });
 
-// A member's profile as other members see it (no want-to-read list, no password info).
+// A member's profile as other members see it (no password info).
 route('GET', '/api/members/:id', async ({ db, params }) => {
   const m = await db.prepare(`SELECT m.id, m.name, m.first_name, m.discord, m.created_at, m.storygraph_url, m.goodreads_url,
       m.favorite_book_id, b.title AS favorite_title, b.cover_url AS favorite_cover FROM members m LEFT JOIN books_read b ON b.id = m.favorite_book_id
@@ -325,7 +329,9 @@ route('GET', '/api/members/:id', async ({ db, params }) => {
   if (!m) return bad('no such member', 404);
   const notes = (await db.prepare(`SELECT n.book_id, n.note, n.updated_at, b.position, b.title, b.author, b.cover_url
     FROM book_notes n JOIN books_read b ON b.id = n.book_id WHERE n.member_id = ? ORDER BY b.position`).bind(m.id).all()).results;
-  return json({ member: withCover(m, 'favorite_book_id', 'favorite_cover'), tiers: await tiersOf(db, m.id), notes: withCovers(notes, 'book_id') });
+  const wantToRead = (await db.prepare(`SELECT id, title, author, ol_key, cover_id, year, added_at FROM want_to_read
+    WHERE member_id = ? ORDER BY added_at DESC, id DESC`).bind(m.id).all()).results;
+  return json({ member: withCover(m, 'favorite_book_id', 'favorite_cover'), tiers: await tiersOf(db, m.id), notes: withCovers(notes, 'book_id'), wantToRead });
 });
 
 // Current debt/weight standings, for transparency.
@@ -363,14 +369,16 @@ route('POST', '/api/elections', async ({ db, body }) => {
   return json(r, 201);
 });
 
-route('GET', '/api/elections/:id', async ({ db, params }) => {
+route('GET', '/api/elections/:id', async ({ db, params, me }) => {
   const e = await getElection(db, params.id);
   if (!e) return bad('no such election', 404);
   const candidates = await candidatesOf(db, e.id);
   const ballots = await ballotsOf(db, e.id);
-  // While voting is open, show who has voted but not how.
-  const shown = e.status === 'closed' ? ballots : ballots.map(({ member_id, name, updated_at }) => ({ member_id, name, updated_at }));
-  return json({ election: e, methods: METHODS, candidates, ballots: shown });
+  // While voting is open, show who has voted but not how, except to admins, who also get the count so far.
+  const admin = isAdmin(me);
+  const shown = e.status === 'closed' || admin ? ballots : ballots.map(({ member_id, name, updated_at }) => ({ member_id, name, updated_at }));
+  const live = admin && e.status === 'voting' && ballots.length && candidates.length ? await count(db, e) : null;
+  return json({ election: e, methods: METHODS, candidates, ballots: shown, live });
 });
 
 route('PATCH', '/api/elections/:id', async ({ db, params, body }) => {
@@ -405,11 +413,43 @@ route('POST', '/api/elections/:id/candidates', async ({ db, params, body, me }) 
   const title = str(body.title, 200);
   if (!title) return bad('title required');
   const int = (v) => (Number.isInteger(v) ? v : null);
+  // Admins can enter a nomination on someone else's behalf.
+  let nominator = me.id;
+  if (body.nominator_id != null && body.nominator_id !== me.id) {
+    if (!isAdmin(me)) return ADMINS_ONLY();
+    if (!(await memberExists(db, body.nominator_id))) return bad('no such member');
+    nominator = body.nominator_id;
+  }
   const r = await db.prepare(`INSERT INTO candidates (election_id, title, author, nominator_id, ol_key, cover_id, isbn, year, pitch)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`).bind(e.id, title, str(body.author, 200) || null,
-    me.id, str(body.ol_key, 60) || null, int(body.cover_id), str(body.isbn, 20) || null,
+    nominator, str(body.ol_key, 60) || null, int(body.cover_id), str(body.isbn, 20) || null,
     int(body.year), str(body.pitch, 1000) || null).first();
   return json(r, 201);
+});
+
+// Admins: fix a book's details or nominator. Ballots are keyed by candidate id, so votes carry over.
+route('PATCH', '/api/elections/:id/candidates/:cid', async ({ db, params, body, me }) => {
+  if (!isAdmin(me)) return ADMINS_ONLY();
+  const e = await getElection(db, params.id);
+  if (!e) return bad('no such election', 404);
+  if (e.status === 'closed') return bad('election is closed');
+  const sets = [], vals = [];
+  const set = (col, v) => { sets.push(`${col} = ?`); vals.push(v); };
+  if ('title' in body) { const t = str(body.title, 200); if (!t) return bad('title required'); set('title', t); }
+  for (const [f, max] of [['author', 200], ['pitch', 1000], ['isbn', 20], ['ol_key', 60]]) if (f in body) set(f, str(body[f], max) || null);
+  for (const f of ['year', 'cover_id']) {
+    if (!(f in body)) continue;
+    if (body[f] != null && body[f] !== '' && !Number.isInteger(body[f])) return bad(`${f} must be a whole number`);
+    set(f, Number.isInteger(body[f]) ? body[f] : null);
+  }
+  if ('nominator_id' in body) {
+    if (body.nominator_id != null && !(await memberExists(db, body.nominator_id))) return bad('no such member');
+    set('nominator_id', body.nominator_id ?? null);
+  }
+  if (!sets.length) return bad('nothing to update');
+  const r = await db.prepare(`UPDATE candidates SET ${sets.join(', ')} WHERE id = ? AND election_id = ?`).bind(...vals, params.cid, e.id).run();
+  if (!r.meta.changes) return bad('no such book', 404);
+  return json({ ok: true });
 });
 
 route('DELETE', '/api/elections/:id/candidates/:cid', async ({ db, params }) => {
@@ -447,6 +487,15 @@ route('DELETE', '/api/elections/:id/ballot', async ({ db, params, me }) => {
   const e = await getElection(db, params.id);
   if (e?.status !== 'voting') return bad('voting is not open');
   await db.prepare('DELETE FROM ballots WHERE election_id = ? AND member_id = ?').bind(params.id, me.id).run();
+  return json({ ok: true });
+});
+
+// Admins: remove someone's ballot (a duplicate or test vote, say).
+route('DELETE', '/api/elections/:id/ballots/:mid', async ({ db, params, me }) => {
+  if (!isAdmin(me)) return ADMINS_ONLY();
+  const e = await getElection(db, params.id);
+  if (e?.status !== 'voting') return bad('voting is not open');
+  await db.prepare('DELETE FROM ballots WHERE election_id = ? AND member_id = ?').bind(e.id, params.mid).run();
   return json({ ok: true });
 });
 

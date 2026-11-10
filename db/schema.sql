@@ -23,7 +23,8 @@ CREATE TABLE members (
   created_at TEXT,
   storygraph_url TEXT,
   goodreads_url TEXT,
-  favorite_book_id INTEGER REFERENCES books_read(id) ON DELETE SET NULL
+  favorite_book_id INTEGER REFERENCES books_read(id) ON DELETE SET NULL,
+  is_admin INTEGER NOT NULL DEFAULT 0  -- counts only when the account has a password
 );
 
 CREATE UNIQUE INDEX members_discord ON members (discord COLLATE NOCASE) WHERE discord IS NOT NULL;

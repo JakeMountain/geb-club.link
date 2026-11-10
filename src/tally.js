@@ -200,3 +200,9 @@ export function tally({ method, candidates, ballots, seed }, state = emptyState(
   const plain = method === 'debt-star' ? weightedStar(candidates, ballots, {}, seed).winner : result.winner;
   return { method, params: method === 'debt-star' ? p : null, weights, debts, ...result, plainStarWinner: plain, voters: voters.length };
 }
+
+/** A count with the per-member parts (weights, debts) taken out: totals, runoff and winner only. */
+export function standings(result) {
+  const { weights, debts, ...rest } = result;
+  return rest;
+}

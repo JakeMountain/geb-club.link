@@ -27,9 +27,10 @@ function currentBook(book) {
       el('div',
         el('h3', el('cite', book.title)),
         el('p.muted', [`#${book.position}`, book.author, book.nominator && book.nominator !== 'none' ? `nominated by ${book.nominator}` : null, book.read_date].filter(Boolean).join(' · ')),
-        book.notes ? el('p.small', book.notes) : '',
+        book.notes && !(book.election_id && /: ".*"$/.test(book.notes)) ? el('p.small', book.notes) : '',
         bookLinks(book),
-        el('p.small', el('a', { href: `/members/book?id=${book.id}` }, 'Notes and favorites')))),
+        el('p.small.links', el('a', { href: `/members/book?id=${book.id}` }, 'Notes and favorites'),
+          book.election_id && el('a', { href: `/members/election?id=${book.election_id}` }, 'Election')))),
   ];
 }
 

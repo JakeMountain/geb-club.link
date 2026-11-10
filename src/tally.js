@@ -178,6 +178,21 @@ export function replay(history, start = {}, p = DEBT_PARAMS) {
   return state;
 }
 
+/**
+ * One voter's debt and weight going into the first round, then after each round:
+ * [{ debt, weight, voted }], one entry longer than history (entry 0 has voted: null).
+ */
+export function trace(history, voter, start = {}, p = DEBT_PARAMS) {
+  const state = emptyState(start, p);
+  const point = (voted) => ({ debt: debtsFor(state, [voter])[voter], weight: weightsFor(state, [voter], p)[voter], voted });
+  const out = [point(null)];
+  for (const e of history) {
+    applyRound(state, e.candidates, e.ballots, e.winner, p);
+    out.push(point(e.ballots.some((b) => b.voter === voter)));
+  }
+  return out;
+}
+
 /** Full count for one election given the state from all earlier rounds. */
 export function tally({ method, candidates, ballots, seed }, state = emptyState(), p = DEBT_PARAMS) {
   const voters = ballots.map((b) => b.voter);

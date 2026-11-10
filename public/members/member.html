@@ -6,6 +6,18 @@
 <title>Member · GEB Club</title>
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="/favicon.svg">
+<style>
+  svg.debt { width: 100%; height: auto; display: block; overflow: visible; }
+  svg.debt .zero { stroke: var(--rule); stroke-width: 1; }
+  svg.debt .axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  svg.debt .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  svg.debt .pt { fill: var(--accent); stroke: var(--paper); stroke-width: 2; }
+  svg.debt .pt.out { fill: var(--paper); stroke: var(--accent); }
+  svg.debt .pt.start { fill: var(--muted); }
+  svg.debt a:hover .pt, svg.debt a:focus-visible .pt { r: 7; }
+  svg.debt a:focus-visible { outline: none; }
+  svg.debt .now { fill: var(--ink); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--paper); stroke-width: 4px; }
+</style>
 </head>
 <body>
 <header class="site"><nav>
@@ -20,12 +32,40 @@ import { api, el, tierView, TIERS, getMe, thumb, fmt, bookCard, who } from './ap
 const id = new URLSearchParams(location.search).get('id');
 const main = document.getElementById('main');
 
+const NS = 'http://www.w3.org/2000/svg';
+const S = (tag, attrs = {}, parent) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); parent?.append(n); return n; };
+
+// Debt going into the first election, then after each one. Each point links to its election.
+function debtChart(steps, W) {
+  const H = 170, L = 42, R = 44, T = 14, B = 14;
+  const vals = steps.map((s) => s.debt);
+  let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  if (hi - lo < 0.2) { hi += 0.1; lo -= 0.1; }
+  const x = (i) => L + (i / (steps.length - 1)) * (W - L - R), y = (v) => T + ((hi - v) / (hi - lo)) * (H - T - B);
+  const svg = S('svg', { viewBox: `0 0 ${W} ${H}`, class: 'debt', role: 'img', 'aria-label': `Debt after each election, now ${fmt(vals.at(-1))}` });
+  S('line', { x1: L, x2: W - R, y1: y(0), y2: y(0), class: 'zero' }, svg);
+  for (const v of new Set([hi, 0, lo])) S('text', { x: L - 10, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, svg).textContent = fmt(v);
+  S('polyline', { points: steps.map((s, i) => `${x(i)},${y(s.debt)}`).join(' '), class: 'line' }, svg);
+  steps.forEach((s, i) => {
+    const g = s.election_id ? S('a', { href: `/members/election?id=${s.election_id}` }, svg) : S('g', {}, svg);
+    S('title', {}, g).textContent = s.election_id ? `${s.title}${s.voted ? '' : ' (did not vote)'}: debt ${fmt(s.debt)}, weight ${fmt(s.weight)}` : `Start: debt ${fmt(s.debt)}`;
+    S('circle', { cx: x(i), cy: y(s.debt), r: s.election_id ? 5 : 3.5, class: `pt${s.election_id ? (s.voted ? '' : ' out') : ' start'}` }, g);
+  });
+  S('text', { x: x(steps.length - 1) + 10, y: y(vals.at(-1)) + 4, class: 'now' }, svg).textContent = fmt(vals.at(-1));
+  return svg;
+}
+
 async function load() {
-  const [{ member: m, tiers, notes, wantToRead }, me, { members: standings }] = await Promise.all([api(`/api/members/${id}`), getMe(), api('/api/standings')]);
+  const [{ member: m, tiers, notes, wantToRead, debtHistory }, me, { members: standings }] = await Promise.all([api(`/api/members/${id}`), getMe(), api('/api/standings')]);
   const st = standings.find((x) => x.id === m.id);
   document.title = `${m.name} · GEB Club`;
   const ext = (href, label) => href && el('a', { href, target: '_blank', rel: 'noopener' }, label);
   const ranked = TIERS.some((t) => tiers[t].length);
+  const debtBox = el('div');
+  if (debtHistory?.length > 1) {
+    let drawn = 0;
+    new ResizeObserver(() => { const w = Math.round(debtBox.clientWidth); if (w && w !== drawn) { drawn = w; debtBox.replaceChildren(debtChart(debtHistory, w)); } }).observe(debtBox);
+  }
   main.replaceChildren(...[
     el('p.small.back', el('a', { href: '/members/' }, '← Members')),
     el('h1', who(m.name)),
@@ -33,7 +73,9 @@ async function load() {
     (m.storygraph_url || m.goodreads_url) ? el('p.links', ext(m.storygraph_url, 'StoryGraph'), ext(m.goodreads_url, 'Goodreads')) : '',
     st ? el('div.tiles', [[fmt(st.weight), 'Vote weight'], [fmt(st.debt), 'Debt'], [fmt(st.attendance), 'Attendance'], [st.voted, 'Elections voted']]
       .map(([v, k]) => el('div.tile', el('div.v', v), el('div.k', k)))) : '',
-    st ? el('p.small', el('a', { href: '/voting' }, 'How debt and weight work')) : '',
+    debtHistory?.length > 1 ? [el('h2', 'Debt'),
+      el('p.muted.small', 'After each election. Hollow points: did not vote. ', el('a', { href: '/voting' }, 'How debt and weight work')),
+      debtBox] : st ? el('p.small', el('a', { href: '/voting' }, 'How debt and weight work')) : '',
     m.favorite_book_id ? el('p.book', { style: 'align-items:center' }, thumb(m.favorite_cover), el('span', 'Favorite club book: ', el('a', { href: `/members/book?id=${m.favorite_book_id}` }, el('cite', m.favorite_title)))) : '',
     el('h2', 'Tier list'),
     ranked ? tierView(tiers) : el('p.muted', 'None'),

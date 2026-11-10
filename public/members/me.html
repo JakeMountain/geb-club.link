@@ -35,38 +35,35 @@ function form(children, fn, msg, ok) {
 
 const saveMe = async (body) => { ({ me } = await api('/api/me', { method: 'PATCH', body })); };
 
-function nameSection() {
+function profileSection() {
   const first = el('input', { id: 'pf-first', maxLength: 40, value: me.first_name ?? '', style: 'width:100%' });
   const discord = el('input', { id: 'pf-discord', maxLength: 40, value: me.discord ?? '', style: 'width:100%' });
+  const sg = el('input', { id: 'pf-sg', type: 'url', value: me.storygraph_url ?? '', placeholder: 'https://app.thestorygraph.com/profile/…', style: 'width:100%' });
+  const gr = el('input', { id: 'pf-gr', type: 'url', value: me.goodreads_url ?? '', placeholder: 'https://www.goodreads.com/user/show/…', style: 'width:100%' });
   const msg = errorLine(), ok = okLine();
-  return [el('h2', 'Name'), form(el('div.row',
-    el('div', el('label', { htmlFor: 'pf-first' }, 'First name'), first),
-    el('div', el('label', { htmlFor: 'pf-discord' }, 'Discord handle'), discord),
-    el('button', 'Save')), async () => {
-    await saveMe({ first_name: first.value, discord: discord.value });
+  return [el('h2', 'Profile'), form([
+    el('div.row',
+      el('div', el('label', { htmlFor: 'pf-first' }, 'First name'), first),
+      el('div', el('label', { htmlFor: 'pf-discord' }, 'Discord handle'), discord)),
+    el('label', { htmlFor: 'pf-sg' }, 'StoryGraph'), sg,
+    el('label', { htmlFor: 'pf-gr' }, 'Goodreads'), gr,
+    el('p', el('button', 'Save')),
+  ], async () => {
+    await saveMe({ first_name: first.value, discord: discord.value, storygraph_url: sg.value, goodreads_url: gr.value });
     document.getElementById('who').replaceChildren(who(me.name));
   }, msg, ok)];
 }
 
-function linksSection() {
-  const sg = el('input', { id: 'pf-sg', type: 'url', value: me.storygraph_url ?? '', placeholder: 'https://app.thestorygraph.com/profile/…', style: 'width:100%' });
-  const gr = el('input', { id: 'pf-gr', type: 'url', value: me.goodreads_url ?? '', placeholder: 'https://www.goodreads.com/user/show/…', style: 'width:100%' });
-  const msg = errorLine(), ok = okLine();
-  return [el('h2', 'Profiles'), form([
-    el('label', { htmlFor: 'pf-sg' }, 'StoryGraph'), sg,
-    el('label', { htmlFor: 'pf-gr' }, 'Goodreads'), gr,
-    el('p', el('button', 'Save')),
-  ], () => saveMe({ storygraph_url: sg.value, goodreads_url: gr.value }), msg, ok)];
-}
-
 function favoriteSection(books) {
-  const sel = el('select', { id: 'pf-fav', style: 'width:100%' },
+  const status = el('span.small', { role: 'status' });
+  const sel = el('select', { id: 'pf-fav', style: 'width:100%; max-width:26rem', onchange: async () => {
+    status.textContent = '';
+    try { await saveMe({ favorite_book_id: sel.value || null }); status.textContent = 'Saved'; status.className = 'small ok'; }
+    catch (err) { status.textContent = err.message; status.className = 'small error'; }
+  } },
     el('option', { value: '' }, '—'),
     books.map((b) => el('option', { value: b.id, selected: b.id === me.favorite_book_id }, b.title)));
-  const msg = errorLine(), ok = okLine();
-  return [el('h2', 'Favorite club book'), form(el('div.row',
-    el('div', sel), el('button', 'Save')),
-  () => saveMe({ favorite_book_id: sel.value || null }), msg, ok)];
+  return [el('h2', 'Favorite club book'), el('p', sel, ' ', status)];
 }
 
 async function tierSection(books) {
@@ -240,12 +237,26 @@ async function load() {
     return;
   }
   const books = await api('/api/books');
-  const parts = [
+  const clean = (parts) => parts.flat(Infinity).filter(Boolean);
+  // Two views: the lists members keep, and account settings. #account opens the second.
+  const panels = {
+    books: el('div', clean([await tierSection(books), favoriteSection(books), await wantSection(), await notesSection(books)])),
+    account: el('div', clean([profileSection(), passwordSection(), exportSection(books)])),
+  };
+  const tabs = Object.fromEntries([['books', 'Books'], ['account', 'Account']].map(([k, label]) =>
+    [k, el('button', { type: 'button', role: 'tab', id: `tab-${k}`, onclick: () => { history.replaceState(null, '', k === 'books' ? location.pathname : '#account'); show(k); } }, label)]));
+  const show = (k) => {
+    for (const key in panels) {
+      panels[key].hidden = key !== k;
+      tabs[key].setAttribute('aria-selected', String(key === k));
+    }
+  };
+  for (const k in panels) { panels[k].className = 'panel'; panels[k].setAttribute('role', 'tabpanel'); panels[k].setAttribute('aria-labelledby', `tab-${k}`); }
+  show(location.hash === '#account' ? 'account' : 'books');
+  main.replaceChildren(
     el('h1', el('span', { id: 'who' }, who(me.name))),
-    nameSection(), linksSection(), favoriteSection(books), await tierSection(books),
-    await wantSection(), await notesSection(books), exportSection(books), passwordSection(),
-  ];
-  main.replaceChildren(...parts.flat(Infinity).filter(Boolean));
+    el('div.tabs', { role: 'tablist' }, tabs.books, tabs.account),
+    panels.books, panels.account);
 }
 
 load().catch((err) => main.replaceChildren(el('p.error', err.message)));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { weightedStar, tally, replay, applyRound, emptyState, weightsFor, happiness, DEBT_PARAMS } from '../src/tally.js';
+import { weightedStar, tally, replay, trace, applyRound, emptyState, weightsFor, happiness, DEBT_PARAMS } from '../src/tally.js';
 
 const B = (voter, scores) => ({ voter, scores });
 
@@ -100,4 +100,21 @@ test('founding members start at weight 1; seeds set starting debt', () => {
   assert.equal(w.ana, 1);
   assert.ok(Math.abs(w.ben - 1.2) < 1e-9);
   assert.ok(Math.abs(w.new - DEBT_PARAMS.newcomerAttendance * (1 + 0.1)) < 1e-9, 'newcomer: median debt (0.1), reduced attendance');
+});
+
+test('trace follows one voter through each round', () => {
+  const history = [
+    { candidates: ['A', 'B'], ballots: [B('x', { A: 5, B: 0 }), B('y', { A: 0, B: 5 })], winner: 'A' },
+    { candidates: ['A', 'B'], ballots: [B('x', { A: 5, B: 0 })], winner: 'A' },
+  ];
+  const start = { founders: ['x', 'y'] };
+  const steps = trace(history, 'y', start);
+  assert.equal(steps.length, 3);
+  assert.deepEqual(steps[0], { debt: 0, weight: 1, voted: null });
+  assert.equal(steps[1].voted, true);
+  assert.ok(steps[1].debt > 0);            // y lost round one, so is owed
+  assert.equal(steps[2].voted, false);
+  assert.ok(Math.abs(steps[2].debt - steps[1].debt * DEBT_PARAMS.decay) < 1e-9);  // sat out: debt only decays
+  const end = replay(history, start);
+  assert.ok(Math.abs(steps[2].debt - end.debt.y) < 1e-9);
 });

@@ -26,7 +26,7 @@ async function load() {
   const [data, ms, m] = await Promise.all([api(`/api/elections/${id}`), api('/api/members'), getMe()]);
   members = ms;
   me = m;
-  const { election: e, candidates, ballots, methods, live } = data;
+  const { election: e, candidates, ballots, methods, live, book } = data;
   document.title = `${e.title} · GEB Club`;
   const head = [
     el('p.small.back', el('a', { href: '/members/current' }, '← All elections')),
@@ -39,7 +39,7 @@ async function load() {
   ];
   const body = e.status === 'nominating' ? nominating(e, candidates)
     : e.status === 'voting' ? await voting(e, candidates, ballots, live)
-    : results(e, candidates, ballots);
+    : results(e, candidates, ballots, book);
   main.replaceChildren(...[...head, ...body].flat(Infinity).filter((n) => n != null && n !== false && n !== ''));
 }
 
@@ -171,7 +171,14 @@ async function voting(e, candidates, ballots, live) {
   ];
   if (!me) return [el('h2', 'Ballot'), signInLink(), ...votedList];
 
-  const { scores } = await api(`/api/elections/${id}/ballot`);
+  const { scores: cast } = await api(`/api/elections/${id}/ballot`);
+  // Picks not yet submitted are kept in this browser, so leaving the page doesn't lose them.
+  const DRAFT = `geb-ballot-${id}-${me.id}`;
+  const draft = (() => { try { return JSON.parse(localStorage.getItem(DRAFT)); } catch { return null; } })();
+  const clearDraft = () => { try { localStorage.removeItem(DRAFT); } catch {} };
+  const valid = (v) => Number.isInteger(v) && v >= 0 && v <= 5;
+  const unsent = draft && candidates.some((c) => valid(draft[c.id]) && draft[c.id] !== cast?.[c.id]);
+  const scores = unsent ? { ...cast, ...Object.fromEntries(candidates.filter((c) => valid(draft[c.id])).map((c) => [c.id, draft[c.id]])) } : cast;
   const msg = el('p.small.error', { role: 'alert' });
   const count = el('span.count.small.muted', { role: 'status' });
   const form = el('form',
@@ -184,14 +191,20 @@ async function voting(e, candidates, ballots, live) {
       admin() && editBook(c),
     ]))),
     msg,
-    el('div.ballot-bar', el('button', scores ? 'Update ballot' : 'Submit ballot'),
-      scores && action('Withdraw', async () => {
+    el('div.ballot-bar', el('button', cast ? 'Update ballot' : 'Submit ballot'),
+      cast && action('Withdraw', async () => {
         if (!confirm('Withdraw your ballot?')) return;
         await api(`/api/elections/${id}/ballot`, { method: 'DELETE' });
+        clearDraft();
       }, '.secondary'),
       count));
-  const tick = () => { count.textContent = `${new Set([...new FormData(form).keys()]).size} / ${candidates.length}`; };
-  form.addEventListener('change', tick);
+  const picks = () => Object.fromEntries([...new FormData(form)].map(([k, v]) => [k.slice(1), Number(v)]));
+  const tick = () => {
+    const p = picks(), n = Object.keys(p).length;
+    const changed = candidates.some((c) => p[c.id] !== undefined && p[c.id] !== cast?.[c.id]);
+    count.textContent = `${n} / ${candidates.length}${changed ? ' · not submitted' : ''}`;
+  };
+  form.addEventListener('change', () => { try { localStorage.setItem(DRAFT, JSON.stringify(picks())); } catch {} tick(); });
   tick();
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -199,13 +212,14 @@ async function voting(e, candidates, ballots, live) {
     const body = { scores: Object.fromEntries(candidates.map((c) => [c.id, Number(fd.get(`c${c.id}`))])) };
     try {
       await api(`/api/elections/${id}/ballot`, { method: 'PUT', body });
+      clearDraft();
       await load();
     } catch (err) { msg.textContent = err.message; }
   });
 
   return [
     el('h2', 'Ballot'),
-    el('p.small', 'Voting as ', el('strong', who(me.name)), scores ? el('span.ok', ' · voted') : ''),
+    el('p.small', 'Voting as ', el('strong', who(me.name)), cast ? el('span.ok', ' · voted') : ''),
     form,
     ...votedList,
     admin() && [el('h2', 'Count so far'),
@@ -222,7 +236,10 @@ async function voting(e, candidates, ballots, live) {
 }
 
 // ---------------------------------------------------------------- results
-const results = (e, candidates, ballots) => tallyView(e, candidates, ballots, e.result, e.winner_id, 'Winner');
+const results = (e, candidates, ballots, book) => {
+  const [winner, ...rest] = tallyView(e, candidates, ballots, e.result, e.winner_id, 'Winner');
+  return [winner, book && el('p.small', el('a', { href: `/members/book?id=${book.id}` }, 'Notes and favorites')), ...rest];
+};
 
 // The count: winner, scoring round, runoff and every ballot. Used for closed elections, and for
 // admins while voting is open (ballotAction adds a control to each ballot row).

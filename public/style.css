@@ -115,6 +115,13 @@ details > summary { cursor: pointer; }
 details.card > summary { font-weight: 600; }
 details.card[open] > summary { margin-bottom: .6rem; }
 
+/* two or three views of one page */
+.tabs { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--rule); border-radius: 99px; background: var(--card); margin: .2rem 0 0; }
+.tabs button { background: none; border: 0; color: var(--muted); border-radius: 99px; padding: .3rem 1.1rem; }
+.tabs button:hover { color: var(--accent); filter: none; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); }
+.panel > h2:first-child { margin-top: 1.6rem; }
+
 /* a row of figures */
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: .9rem; margin: 1rem 0 .5rem; }
 .tile { border-top: 2px solid var(--accent); padding-top: .4rem; }

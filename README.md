@@ -1,6 +1,6 @@
 # geb-club.link
 
-The GEB Club website: reading history, how we vote, and members-only elections.
+The GEB Club website: reading history, and a members area with elections, tier lists and notes.
 
 Static pages in `public/`, API in `functions/` (Cloudflare Pages Functions), data in Cloudflare D1 (SQLite).
 
@@ -17,20 +17,47 @@ npm run dev                      # http://localhost:8788
 
 The members area uses the `CLUB_PASSWORD` from your `.dev.vars`.
 
+If `npm run dev` starts but pages never load, an old dev server is still holding port 8788. Close it (Task Manager: `workerd.exe`), or use another port: `npx wrangler pages dev --port 8799`.
+
+The local database starts with the books only. Create accounts and elections through the site to try the members pages.
+
 ## Tests
 
 ```sh
 npm test
 ```
 
+## Pages
+
+Public: `/` (home), `/history`, `/voting`, `/enter` (club password).
+
+Members:
+
+| Page | What |
+|---|---|
+| `/members/` | Sign in or create an account, member list with debt and weight, history with notes. |
+| `/members/current` | Current book and all elections. |
+| `/members/election?id=` | One election: nominate, vote, results. Unsent ballot picks are kept in the browser until submitted. |
+| `/members/book?id=` | One book: notes, who favorited it, link to its election. |
+| `/members/member?id=` | One member: weight, debt after each election, tier list, notes, want to read. |
+| `/members/me` | Your own page, in two views: Books (tier list, favorite, want to read, notes) and Account (profile, password, export). `/members/me#account` opens the second. |
+| `/members/tiers`, `/members/taste`, `/members/almanac`, `/members/gallery`, `/members/shame` | Club tier list, taste map, almanac, print gallery, hall of shame. |
+
+Pages are plain HTML with a module script; there is no build step for local dev. Check a layout change at phone width (about 390px) as well as desktop, in light and dark.
+
 ## Layout
 
 | Path | What |
 |---|---|
 | `public/` | Pages. `public/members/` is behind the club password. |
+| `public/style.css` | All shared styles: colors (light and dark), header, tables, forms, cards, election results, tier lists, covers. A page keeps only its own one-off styles in a `<style>` block. |
+| `public/nav.js` | Top bar on every page: the trip-let, "My page" and "Sign out" when signed in, and the second row of links on members pages. |
+| `public/members/app.js` | Shared helpers for the members pages: `api`, `el`, book cards, book search, name display, tier list view and editor. |
+| `public/members/tierstats.js` | Tier list statistics: club averages, agreement between members, taste map, predictions. |
+| `public/voting.html` | How we vote. Not in the top bar; linked from the election, current book, members and member pages. |
 | `functions/_middleware.js` | Club password gate. |
 | `functions/api/[[path]].js` | All API routes. |
-| `src/tally.js` | Vote counting: debt-weighted STAR and plain STAR. |
+| `src/tally.js` | Vote counting: debt-weighted STAR and plain STAR, and each member's debt after every election. |
 | `src/auth.js` | Club password cookie, member accounts, password hashing. |
 | `db/schema.sql` | Database schema. `db/migrations/` holds changes already applied to the live database. |
 | `db/book_media.sql` | Cover image source and StoryGraph link for each book read. Re-runnable. |

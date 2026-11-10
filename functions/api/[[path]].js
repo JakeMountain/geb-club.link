@@ -1,6 +1,6 @@
 // All API routes. Auth is enforced in functions/_middleware.js.
 import { passwordMatches, loginCookie, logoutCookie, hashPassword, verifyPassword, accountCookie, accountLogoutCookie, currentAccount } from '../../src/auth.js';
-import { METHODS, DEBT_PARAMS, replay, tally, debtsFor, weightsFor, attendance } from '../../src/tally.js';
+import { METHODS, DEBT_PARAMS, replay, trace, tally, debtsFor, weightsFor, attendance } from '../../src/tally.js';
 
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers });
 const bad = (msg, status = 400) => json({ error: msg }, status);
@@ -54,19 +54,22 @@ const ballotsOf = (db, id) =>
   db.prepare('SELECT b.member_id, m.name, b.scores, b.updated_at FROM ballots b JOIN members m ON m.id = b.member_id WHERE election_id = ? ORDER BY m.name')
     .bind(id).all().then((r) => r.results.map((b) => ({ ...b, scores: JSON.parse(b.scores) })));
 
-// Debt state from every closed election, oldest first. Voters/candidates are keyed by id strings.
-async function debtState(db, beforeId = null) {
-  const closed = (await db.prepare(`SELECT id, winner_id FROM elections WHERE status = 'closed' AND winner_id IS NOT NULL
+// Every closed election, oldest first, in the shape the tally functions take. Voters/candidates are keyed by id strings.
+async function closedHistory(db, beforeId = null) {
+  const closed = (await db.prepare(`SELECT id, title, winner_id FROM elections WHERE status = 'closed' AND winner_id IS NOT NULL
                                     ${beforeId ? 'AND id != ?' : ''} ORDER BY closed_at, id`)
     .bind(...(beforeId ? [beforeId] : [])).all()).results;
   const history = [];
   for (const e of closed) {
     const cands = (await candidatesOf(db, e.id)).map((c) => String(c.id));
     const ballots = (await ballotsOf(db, e.id)).map((b) => ({ voter: String(b.member_id), scores: b.scores }));
-    history.push({ candidates: cands, ballots, winner: String(e.winner_id) });
+    history.push({ id: e.id, title: e.title, candidates: cands, ballots, winner: String(e.winner_id) });
   }
-  return replay(history, await startState(db));
+  return history;
 }
+
+// Debt state after those elections.
+const debtState = async (db, beforeId = null) => replay(await closedHistory(db, beforeId), await startState(db));
 
 // Founding members (joined before the first election closed) start at full attendance;
 // debt_seeds holds starting debts.
@@ -254,7 +257,8 @@ route('GET', '/api/books/:id', async ({ db, params }) => {
   const notes = (await db.prepare(`SELECT n.member_id, m.name, n.note, n.updated_at FROM book_notes n
     JOIN members m ON m.id = n.member_id WHERE n.book_id = ? ORDER BY n.updated_at`).bind(book.id).all()).results;
   const favoriteOf = (await db.prepare('SELECT name FROM members WHERE favorite_book_id = ? ORDER BY name').bind(book.id).all()).results.map((r) => r.name);
-  return json({ book: withCover(book), notes, favoriteOf });
+  const election = book.election_id ? await db.prepare('SELECT id, title FROM elections WHERE id = ?').bind(book.election_id).first() : null;
+  return json({ book: withCover(book), notes, favoriteOf, election });
 });
 
 // Your note on a past book; empty note deletes it.
@@ -363,7 +367,11 @@ route('GET', '/api/members/:id', async ({ db, params }) => {
     FROM book_notes n JOIN books_read b ON b.id = n.book_id WHERE n.member_id = ? ORDER BY b.position`).bind(m.id).all()).results;
   const wantToRead = (await db.prepare(`SELECT id, title, author, ol_key, cover_id, year, added_at FROM want_to_read
     WHERE member_id = ? ORDER BY added_at DESC, id DESC`).bind(m.id).all()).results;
-  return json({ member: withCover(m, 'favorite_book_id', 'favorite_cover'), tiers: await tiersOf(db, m.id), notes: withCovers(notes, 'book_id'), wantToRead });
+  // debt and weight going into the first election, then after each one
+  const history = await closedHistory(db);
+  const steps = trace(history, String(m.id), await startState(db));
+  const debtHistory = steps.map((s, i) => ({ ...s, election_id: history[i - 1]?.id ?? null, title: history[i - 1]?.title ?? null }));
+  return json({ member: withCover(m, 'favorite_book_id', 'favorite_cover'), tiers: await tiersOf(db, m.id), notes: withCovers(notes, 'book_id'), wantToRead, debtHistory });
 });
 
 // Current debt/weight standings, for transparency.
@@ -410,7 +418,8 @@ route('GET', '/api/elections/:id', async ({ db, params, me }) => {
   const admin = isAdmin(me);
   const shown = e.status === 'closed' || admin ? ballots : ballots.map(({ member_id, name, updated_at }) => ({ member_id, name, updated_at }));
   const live = admin && e.status === 'voting' && ballots.length && candidates.length ? await count(db, e) : null;
-  return json({ election: e, methods: METHODS, candidates, ballots: shown, live });
+  const book = e.status === 'closed' ? await db.prepare('SELECT id, position, title FROM books_read WHERE election_id = ?').bind(e.id).first() : null;
+  return json({ election: e, methods: METHODS, candidates, ballots: shown, live, book });
 });
 
 route('PATCH', '/api/elections/:id', async ({ db, params, body }) => {

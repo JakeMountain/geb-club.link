@@ -21,7 +21,7 @@ const id = new URLSearchParams(location.search).get('id');
 const main = document.getElementById('main');
 
 async function load() {
-  const [{ book, notes, favoriteOf }, me] = await Promise.all([api(`/api/books/${id}`), getMe()]);
+  const [{ book, notes, favoriteOf, election }, me] = await Promise.all([api(`/api/books/${id}`), getMe()]);
   document.title = `${book.title} · GEB Club`;
   const mine = notes.find((n) => n.member_id === me?.id);
   const others = notes.filter((n) => n !== mine);
@@ -58,8 +58,10 @@ async function load() {
       el('div',
         el('h1', el('cite', book.title)),
         el('p.muted', [`#${book.position}`, book.author, book.nominator && book.nominator !== 'none' ? `nominated by ${book.nominator}` : null, book.read_date].filter(Boolean).join(' · ')),
-        book.notes ? el('p.small', book.notes) : '',
-        bookLinks(book))),
+        // the note added when an election closes just names it; the link below says the same
+        book.notes && !(election && book.notes.endsWith(`"${election.title}"`)) ? el('p.small', book.notes) : '',
+        bookLinks(book),
+        election && el('p.small', el('a', { href: `/members/election?id=${election.id}` }, `Election: ${election.title}`)))),
     favoriteOf.length ? el('p.small', 'Favorite of ', favoriteOf.join(', ')) : '',
     el('h2', `Notes (${notes.length})`),
     others.map(noteCard),

@@ -7,3 +7,8 @@ node_modules/
 private/
 misc.txt
 dist/
+
+# Feature request bot
+bot/.env
+bot/state.json
+bot/bot.log

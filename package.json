@@ -7,6 +7,8 @@
     "db:init:local": "wrangler d1 execute geb-club --local --file=db/schema.sql && wrangler d1 execute geb-club --local --file=db/seed.sql && wrangler d1 execute geb-club --local --file=db/book_media.sql && wrangler d1 execute geb-club --local --file=db/tags.sql",
     "test": "node --test \"test/**/*.test.js\"",
     "build": "node scripts/build.mjs",
+    "bot": "node bot/bot.mjs",
+    "bot:watch": "node bot/bot.mjs --watch",
     "deploy": "node scripts/build.mjs && wrangler pages deploy dist --project-name geb-club --branch main"
   },
   "devDependencies": {

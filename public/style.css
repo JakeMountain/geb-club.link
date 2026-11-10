@@ -73,13 +73,28 @@ header.site .menu-list a[aria-current] { color: var(--accent); background: var(-
 /* My page and Sign out at the right */
 header.site .account { margin-left: auto; display: flex; gap: 1.4rem; align-items: center; }
 header.site .account:empty { display: none; }
+/* on phones the account links sit at the bottom of the Club menu instead, and "Current book" shortens on the narrowest */
+header.site .menu-account, header.site .label-short { display: none; }
 @media (max-width: 560px) {
   header.site nav { --brand-w: 76px; --brand-h: 56px; gap: 0 .9rem; font-size: .92rem; }
   header.site .brand { left: calc(var(--gutter) - .4rem); }
-  header.site .account { gap: .9rem; }
+  header.site .account { display: none; }
+  header.site .menu-account { display: flex; flex-direction: column; margin-top: .3rem; padding-top: .3rem; border-top: 1px solid var(--rule); }
+  header.site .menu-account:empty { display: none; }
+  header.site .menu-account button.link { padding: .4rem .6rem; border-radius: 6px; background: none; text-align: left; }
+  header.site .menu-account button.link:hover { background: var(--accent-soft); }
+  header.site .menu summary.has-current-account { color: var(--accent); background-size: 100% 1.5px; }
   /* the menu opens under the whole bar, at the right edge, so it never runs off screen */
   header.site .menu { position: static; }
   header.site .menu-list { top: calc(100% - .2rem); left: auto; right: var(--gutter); }
+}
+@media (max-width: 400px) {
+  header.site nav { --brand-w: 64px; --brand-h: 48px; gap: 0 .75rem; font-size: .9rem; }
+}
+@media (max-width: 360px) {
+  header.site nav { gap: 0 .65rem; }
+  header.site .label-long { display: none; }
+  header.site .label-short { display: inline; }
 }
 
 /* ---------------------------------------------------------------- type */

@@ -51,7 +51,7 @@ Pages are plain HTML with a module script; there is no build step for local dev.
 |---|---|
 | `public/` | Pages. `public/members/` is behind the club password. |
 | `public/style.css` | All shared styles: colors (light and dark), header, tables, forms, cards, election results, tier lists, covers. A page keeps only its own one-off styles in a `<style>` block. |
-| `public/nav.js` | Top bar on every page: the trip-let, one row of links (Current book, History, Members, and a Club menu with the club-wide pages), and "My page" and "Sign out" at the right when signed in. The links are built here; each page's header only holds a fallback. |
+| `public/nav.js` | Top bar on every page: the trip-let, one row of links (Current book, History, Members, and a Club menu with the club-wide pages), and "My page" and "Sign out" at the right when signed in (at the bottom of the Club menu on phones). The links are built here; each page's header only holds a fallback. |
 | `public/members/app.js` | Shared helpers for the members pages: `api`, `el`, book cards, book search, name display, tier list view and editor. |
 | `public/members/tierstats.js` | Tier list statistics: club averages, agreement between members, taste map, predictions. |
 | `public/voting.html` | How we vote. Not in the top bar; linked from the election, current book, members and member pages. |

@@ -1,6 +1,7 @@
 // All API routes. Auth is enforced in functions/_middleware.js.
 import { passwordMatches, loginCookie, logoutCookie, hashPassword, verifyPassword, accountCookie, accountLogoutCookie, currentAccount } from '../../src/auth.js';
 import { METHODS, DEBT_PARAMS, replay, trace, tally, debtsFor, weightsFor, attendance, standings } from '../../src/tally.js';
+import { cleanSchedule } from '../../src/schedule.js';
 
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers });
 const bad = (msg, status = 400) => json({ error: msg }, status);
@@ -292,6 +293,29 @@ route('PUT', '/api/books/:id/note', async ({ db, me, params, body }) => {
       ON CONFLICT (member_id, book_id) DO UPDATE SET note = excluded.note, updated_at = datetime('now')`).bind(me.id, book.id, note).run();
   }
   return json({ ok: true });
+});
+
+// ------------------------------------------------------------ reading schedule (on /members/current)
+
+const scheduleOf = (db, bookId) =>
+  db.prepare('SELECT unit, start_at, end_at, due_date FROM reading_sections WHERE book_id = ? ORDER BY position')
+    .bind(bookId).all().then((r) => r.results);
+
+route('GET', '/api/books/:id/schedule', async ({ db, params }) => json({ sections: await scheduleOf(db, params.id) }));
+
+// Admins: replace a book's whole schedule; an empty list clears it.
+route('PUT', '/api/books/:id/schedule', async ({ db, me, params, body }) => {
+  if (!isAdmin(me)) return ADMINS_ONLY();
+  const book = await db.prepare('SELECT id FROM books_read WHERE id = ?').bind(params.id).first();
+  if (!book) return bad('no such book', 404);
+  const { sections, error } = cleanSchedule(body.sections);
+  if (error) return bad(error);
+  await db.batch([
+    db.prepare('DELETE FROM reading_sections WHERE book_id = ?').bind(book.id),
+    ...sections.map((s, i) => db.prepare('INSERT INTO reading_sections (book_id, position, unit, start_at, end_at, due_date) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(book.id, i, s.unit, s.start_at, s.end_at, s.due_date)),
+  ]);
+  return json({ sections: await scheduleOf(db, book.id) });
 });
 
 // ------------------------------------------------------------ tier lists

@@ -1,61 +1,66 @@
-// Shows "My page" in the top bar while a member account is signed in.
+// The top bar on every page: the trip-let, then one row of links built here,
+// with "My page" and "Sign out" at the right while a member account is signed in.
 // Pages that sign in or out dispatch `geb:account` to update it without a reload.
 const nav = document.querySelector('header.site nav');
+const here = location.pathname.replace(/\.html$/, '').replace(/^\/members$/, '/members/');
 
-function setMyPage(signedIn) {
-  let link = nav.querySelector('a[href="/members/me"]');
-  if (!signedIn) { link?.remove(); return; }
-  if (link) return;
-  link = document.createElement('a');
-  link.href = '/members/me';
-  link.textContent = 'My page';
-  if (location.pathname.replace(/\.html$/, '') === '/members/me') link.setAttribute('aria-current', 'page');
-  nav.querySelector('a[href="/members/"]').after(link);
+// [href, label, other pages that belong under this link]
+const TOP = [
+  ['/members/current', 'Current book', ['/members/election']],
+  ['/history', 'History', ['/members/book']],
+  ['/members/', 'Members', ['/members/member', '/enter']],
+];
+const CLUB = [['/members/tiers', 'Club tier list'], ['/members/taste', 'Taste map'], ['/members/almanac', 'Almanac'], ['/members/gallery', 'Print gallery'], ['/members/shame', 'Hall of shame']];
+
+function link(href, label, also = []) {
+  const a = document.createElement('a');
+  a.href = href; a.textContent = label;
+  if (here === href) a.setAttribute('aria-current', 'page');
+  else if (also.includes(here)) a.setAttribute('aria-current', 'true');
+  return a;
 }
 
-// Sign-out button, next to "My page", on every page while signed in.
-function setSignOut(signedIn) {
-  let btn = nav.querySelector('#logout');
-  if (!signedIn) { btn?.remove(); return; }
-  if (btn) return;
-  btn = document.createElement('button');
+// rebuild the links after the brand so every page has the same set
+for (const n of [...nav.children]) if (!n.classList.contains('brand')) n.remove();
+for (const [href, label, also] of TOP) nav.append(link(href, label, also));
+
+// "Club" opens a menu of the club-wide pages
+const club = document.createElement('details');
+club.className = 'menu';
+const summary = document.createElement('summary');
+summary.textContent = 'Club';
+if (CLUB.some(([href]) => href === here)) summary.setAttribute('aria-current', 'true');
+const list = document.createElement('div');
+list.className = 'menu-list';
+for (const [href, label] of CLUB) list.append(link(href, label));
+club.append(summary, list);
+nav.append(club);
+addEventListener('click', (e) => { if (club.open && !club.contains(e.target)) club.open = false; });
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && club.open) { club.open = false; summary.focus(); } });
+
+// My page and Sign out, kept together at the right
+const account = document.createElement('span');
+account.className = 'account';
+nav.append(account);
+
+function setAccount(signedIn) {
+  account.replaceChildren();
+  if (!signedIn) return;
+  const btn = document.createElement('button');
   btn.className = 'link small';
   btn.id = 'logout';
   btn.textContent = 'Sign out';
   btn.onclick = () => import('/members/app.js').then((m) => m.logout());
-  nav.append(btn);
+  account.append(link('/members/me', 'My page'), btn);
 }
 
 fetch('/api/me', { credentials: 'same-origin' })
   .then((r) => (r.ok ? r.json() : { me: null }))
-  .then((r) => { setMyPage(!!r.me); setSignOut(!!r.me); })
+  .then((r) => setAccount(!!r.me))
   .catch(() => {});
 
-addEventListener('geb:account', (e) => { setMyPage(!!e.detail); setSignOut(!!e.detail); });
+addEventListener('geb:account', (e) => setAccount(!!e.detail));
 
 // The brand is the trip-let: a block whose shadows spell G, E and B, turning slowly.
 const brand = document.querySelector('header.site .brand canvas');
 if (brand) import("/triplet.js").then((m) => m.mountTriplet(brand, { interactive: false, zoom: 1.1 })).catch(() => {});
-
-// A second row on the members pages.
-const SUB = [['/members/current', 'Current book'], ['/members/tiers', 'Club tier list'], ['/members/taste', 'Taste map'], ['/members/almanac', 'Almanac'], ['/members/gallery', 'Print gallery'], ['/members/shame', 'Hall of shame']];
-if (location.pathname.startsWith('/members')) {
-  const here = location.pathname.replace(/\.html$/, '');
-  const sub = document.createElement('nav');
-  sub.className = 'sub';
-  sub.setAttribute('aria-label', 'Members');
-  for (const [href, label] of SUB) {
-    const a = document.createElement('a');
-    a.href = href; a.textContent = label;
-    if (here === href) a.setAttribute('aria-current', 'page');
-    sub.append(a);
-  }
-  nav.after(sub);
-  // on narrow screens the row scrolls: bring the current page into view and fade the edge while there is more
-  const more = () => sub.classList.toggle('more', sub.scrollLeft + sub.clientWidth < sub.scrollWidth - 4);
-  const cur = sub.querySelector('[aria-current]');
-  if (cur) sub.scrollLeft = cur.offsetLeft - sub.offsetLeft - (sub.clientWidth - cur.offsetWidth) / 2;
-  more();
-  sub.addEventListener('scroll', more, { passive: true });
-  addEventListener('resize', more);
-}

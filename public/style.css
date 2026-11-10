@@ -41,10 +41,10 @@ img { max-width: 100%; }
 ::selection { background: var(--accent); color: var(--on-accent); }
 
 /* ---------------------------------------------------------------- header */
-header.site { border-bottom: 1px solid var(--rule); }
+header.site { border-bottom: 1px solid var(--rule); position: relative; z-index: 10; }
 /* the brand sits at the left; the links fill the space beside it and wrap there on narrow screens */
 header.site nav { --brand-w: 124px; --brand-h: 84px; position: relative; max-width: var(--page); margin: 0 auto; min-height: calc(var(--brand-h) + .6rem);
-  padding: .5rem var(--gutter) .5rem calc(var(--gutter) + var(--brand-w)); display: flex; gap: .15rem 1.4rem; align-items: center; align-content: center; justify-content: flex-end; flex-wrap: wrap; }
+  padding: .5rem var(--gutter) .5rem calc(var(--gutter) + var(--brand-w)); display: flex; gap: .15rem 1.4rem; align-items: center; align-content: center; justify-content: flex-start; flex-wrap: wrap; }
 /* the brand is the trip-let, drawn by nav.js */
 header.site .brand { position: absolute; left: calc(var(--gutter) - .6rem); top: 50%; transform: translateY(-50%); display: block; width: var(--brand-w); height: var(--brand-h); }
 header.site .brand canvas { display: block; width: 100%; height: 100%; }
@@ -54,16 +54,32 @@ header.site a, header.site nav button.link { color: var(--muted); text-decoratio
 header.site a.brand { background: none; padding: 0; }
 header.site a:hover, header.site nav button.link:hover, header.site a[aria-current] { color: var(--accent); }
 header.site a[aria-current]:not(.brand) { background-size: 100% 1.5px; }
-/* second row on the members pages: one line, scrolls sideways when it doesn't fit */
-header.site nav.sub { border-top: 1px solid var(--rule); min-height: 0; padding: .3rem var(--gutter); gap: 1.3rem; font-size: .92rem; justify-content: flex-start; flex-wrap: nowrap;
-  overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
-header.site nav.sub::-webkit-scrollbar { display: none; }
-header.site nav.sub.more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent); }
-header.site nav.sub a { flex: none; }
+header.site nav > a, header.site nav summary { white-space: nowrap; }
+/* "Club" menu, built by nav.js */
+header.site .menu { position: relative; }
+header.site .menu summary { list-style: none; color: var(--muted); padding: .3rem 0; white-space: nowrap;
+  background: linear-gradient(currentColor, currentColor) no-repeat 0 100% / 0 1.5px; transition: color .15s, background-size .2s; }
+header.site .menu summary::-webkit-details-marker { display: none; }
+header.site .menu summary::after { content: ""; display: inline-block; width: .32em; height: .32em; margin: 0 0 .2em .4em;
+  border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); transition: transform .15s; }
+header.site .menu[open] summary::after { transform: translateY(.15em) rotate(-135deg); }
+header.site .menu summary:hover, header.site .menu[open] summary, header.site .menu summary[aria-current] { color: var(--accent); }
+header.site .menu summary[aria-current] { background-size: 100% 1.5px; }
+header.site .menu-list { position: absolute; top: calc(100% + .35rem); left: -.75rem; min-width: 11rem; display: flex; flex-direction: column; padding: .35rem;
+  background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow); }
+header.site .menu-list a { padding: .4rem .6rem; border-radius: 6px; background: none; white-space: nowrap; }
+header.site .menu-list a:hover { background: var(--accent-soft); }
+header.site .menu-list a[aria-current] { color: var(--accent); background: var(--accent-soft); }
+/* My page and Sign out at the right */
+header.site .account { margin-left: auto; display: flex; gap: 1.4rem; align-items: center; }
+header.site .account:empty { display: none; }
 @media (max-width: 560px) {
-  header.site nav { --brand-w: 76px; --brand-h: 56px; gap: 0 1rem; font-size: .92rem; }
+  header.site nav { --brand-w: 76px; --brand-h: 56px; gap: 0 .9rem; font-size: .92rem; }
   header.site .brand { left: calc(var(--gutter) - .4rem); }
-  header.site nav.sub { gap: 1.1rem; font-size: .9rem; }
+  header.site .account { gap: .9rem; }
+  /* the menu opens under the whole bar, at the right edge, so it never runs off screen */
+  header.site .menu { position: static; }
+  header.site .menu-list { top: calc(100% - .2rem); left: auto; right: var(--gutter); }
 }
 
 /* ---------------------------------------------------------------- type */

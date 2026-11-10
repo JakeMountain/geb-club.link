@@ -16,6 +16,10 @@
   .controls label { display: inline-flex; gap: .4rem; align-items: center; margin: 0; }
   .err { color: #b3261e; }
   video { display: none; }
+  .prints { list-style: none; padding: 0; margin: 1rem 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; }
+  .prints li { min-width: 0; }
+  .prints img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .prints .meta { display: flex; justify-content: space-between; align-items: baseline; gap: .4rem; margin-top: .3rem; }
   @media (max-width: 640px) { .view { aspect-ratio: 3 / 4; } }
 </style>
 </head>
@@ -38,10 +42,19 @@
     <span>Drag to move the center</span>
     <span class="err" id="err" role="alert"></span>
   </div>
+  <div class="controls">
+    <button type="button" id="save">Save image</button>
+    <span class="err" id="save-msg" role="alert"></span>
+  </div>
+  <h2>Saved images</h2>
+  <p class="muted small" id="prints-empty" hidden>No saved images yet.</p>
+  <ul class="prints" id="prints"></ul>
 </main>
 <script type="module">
+import { api, el, getMe } from './app.js';
+
 const canvas = document.getElementById('c'), video = document.getElementById('v');
-const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
+const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: true });
 const err = document.getElementById('err');
 if (!gl) { err.textContent = 'WebGL is not available in this browser.'; throw new Error('no webgl'); }
 
@@ -187,6 +200,55 @@ document.getElementById('camera').onclick = async () => {
 
 await drawCovers();
 requestAnimationFrame(render);
+
+// ---------------------------------------------------------------- save & share
+const saveBtn = document.getElementById('save'), saveMsg = document.getElementById('save-msg');
+const printsList = document.getElementById('prints'), printsEmpty = document.getElementById('prints-empty');
+const me = await getMe();
+if (!me) { saveBtn.disabled = true; saveMsg.textContent = 'Sign in to save images.'; }
+
+// Downscaled JPEG copy of the current frame, well under the server's size limit.
+function captureBlob() {
+  const max = 640;
+  const scale = Math.min(1, max / Math.max(canvas.width, canvas.height));
+  const w = Math.max(1, Math.round(canvas.width * scale)), h = Math.max(1, Math.round(canvas.height * scale));
+  const out = document.createElement('canvas'); out.width = w; out.height = h;
+  out.getContext('2d').drawImage(canvas, 0, 0, w, h);
+  return new Promise((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error('could not capture image'))), 'image/jpeg', 0.85));
+}
+
+async function blobToBase64(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+async function renderPrints() {
+  const prints = await api('/api/prints');
+  printsEmpty.hidden = !!prints.length;
+  printsList.replaceChildren(...prints.map((p) => el('li',
+    el('img', { src: `/prints/${p.id}`, alt: '' }),
+    el('div.meta',
+      el('span.muted.small', p.name),
+      me?.id === p.member_id ? el('button.link.small', { type: 'button', onclick: async () => {
+        await api(`/api/me/prints/${p.id}`, { method: 'DELETE' });
+        renderPrints();
+      } }, 'Delete') : ''))));
+}
+
+saveBtn.onclick = async () => {
+  saveMsg.textContent = '';
+  saveBtn.disabled = true;
+  try {
+    const data = await blobToBase64(await captureBlob());
+    await api('/api/me/prints', { method: 'POST', body: { data, content_type: 'image/jpeg' } });
+    await renderPrints();
+  } catch (e) { saveMsg.textContent = e.message || 'could not save image'; }
+  finally { saveBtn.disabled = false; }
+};
+
+await renderPrints();
 </script>
 <script src="/nav.js" defer></script>
 </body>

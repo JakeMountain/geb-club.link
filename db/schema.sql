@@ -156,3 +156,11 @@ CREATE TABLE reading_sections (
   due_date TEXT NOT NULL,  -- YYYY-MM-DD, the meeting it should be finished by
   UNIQUE (book_id, position)
 );
+
+-- votes to give a declined feature request (/members/shame) a second chance; keyed by its title in shame.json
+CREATE TABLE shame_votes (
+  title TEXT NOT NULL,
+  member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (title, member_id)
+);

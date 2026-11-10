@@ -36,10 +36,10 @@
     <li><strong>Happiness</strong> = (score you gave the winner − your lowest score) ÷ (your highest score − your lowest score). 1 if the winner was your top book, 0 if it was your bottom one.</li>
     <li><strong>Stake</strong> = (your highest score − your lowest score) ÷ 5. Scoring every book the same is stake 0. Using the full 0–5 range is stake 1.</li>
   </ul>
-  <div class="callout">debt = 0.85 × debt + stake × (average happiness − your happiness)</div>
+  <div class="callout">debt = debt + stake × (average happiness − your happiness)</div>
   <p>The average happiness is weighted by stake. Debts across the club add up to zero.</p>
   <ul>
-    <li>Non-voters’ debt is multiplied by 0.85 and nothing is added.</li>
+    <li>Non-voters’ debt stays the same.</li>
     <li>Members who joined before the first election start with attendance 1.0.</li>
     <li>Members who join later start at the median debt.</li>
     <li>Attendance = 0.6 + 0.1 × credits, up to 1.0. Credits: +1 per election voted in, −0.5 per election missed, kept between 0 and 8.</li>

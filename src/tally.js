@@ -13,7 +13,6 @@ export const METHODS = {
 // tallies; closed elections keep the snapshot stored in their result.
 export const DEBT_PARAMS = {
   beta: 1.0,     // how strongly debt moves your weight
-  decay: 0.85,   // each round, old debt is multiplied by this (debt halves in ~4 rounds)
   floor: 0.3,    // minimum debt multiplier, so nobody's vote shrinks below 30%
   newcomerAttendance: 0.6, // attendance factor for a first-time voter
   rampRounds: 4, // rounds attended to reach full attendance factor (1.0)
@@ -162,7 +161,6 @@ export function applyRound(state, candidates, ballots, winner, p = DEBT_PARAMS) 
   const h = Object.fromEntries(ballots.map((b) => [b.voter, happiness(b.scores, winner, candidates)]));
   const totalStake = voters.reduce((t, v) => t + h[v].stake, 0);
   const mean = totalStake ? voters.reduce((t, v) => t + h[v].stake * h[v].happiness, 0) / totalStake : 0;
-  for (const v in state.debt) state.debt[v] *= p.decay;
   for (const v of voters) {
     state.debt[v] += h[v].stake * (mean - h[v].happiness);
     state.seen[v] = Math.min(p.maxSeen, (state.seen[v] ?? 0) + 1);
@@ -201,4 +199,10 @@ export function tally({ method, candidates, ballots, seed }, state = emptyState(
   const result = weightedStar(candidates, ballots, weights, seed);
   const plain = method === 'debt-star' ? weightedStar(candidates, ballots, {}, seed).winner : result.winner;
   return { method, params: method === 'debt-star' ? p : null, weights, debts, ...result, plainStarWinner: plain, voters: voters.length };
+}
+
+/** A count with the per-member parts (weights, debts) taken out: totals, runoff and winner only. */
+export function standings(result) {
+  const { weights, debts, ...rest } = result;
+  return rest;
 }

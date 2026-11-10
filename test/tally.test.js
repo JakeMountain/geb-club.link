@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { weightedStar, tally, replay, trace, applyRound, emptyState, weightsFor, happiness, DEBT_PARAMS } from '../src/tally.js';
+import { weightedStar, tally, replay, trace, applyRound, emptyState, weightsFor, happiness, standings, DEBT_PARAMS } from '../src/tally.js';
 
 const B = (voter, scores) => ({ voter, scores });
 
@@ -114,7 +114,20 @@ test('trace follows one voter through each round', () => {
   assert.equal(steps[1].voted, true);
   assert.ok(steps[1].debt > 0);            // y lost round one, so is owed
   assert.equal(steps[2].voted, false);
-  assert.ok(Math.abs(steps[2].debt - steps[1].debt * DEBT_PARAMS.decay) < 1e-9);  // sat out: debt only decays
+  assert.ok(Math.abs(steps[2].debt - steps[1].debt) < 1e-9);  // sat out: debt carries over unchanged
   const end = replay(history, start);
   assert.ok(Math.abs(steps[2].debt - end.debt.y) < 1e-9);
+});
+
+test('standings keep totals, runoff and winner but drop per-member weights and debts', () => {
+  const st = emptyState();
+  st.debt = { x: 1, y: -1 };
+  const r = tally({ method: 'debt-star', candidates: ['A', 'B'], ballots: [B('x', { A: 5, B: 0 }), B('y', { A: 0, B: 5 })] }, st);
+  const s = standings(r);
+  assert.equal(s.winner, r.winner);
+  assert.deepEqual(s.totals, r.totals);
+  assert.deepEqual(s.runoff, r.runoff);
+  assert.equal(s.voters, 2);
+  assert.ok(!('weights' in s) && !('debts' in s));
+  assert.ok(!/"[xy]"/.test(JSON.stringify(s)), 'no voter ids anywhere');
 });

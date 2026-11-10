@@ -1,6 +1,6 @@
 // All API routes. Auth is enforced in functions/_middleware.js.
 import { passwordMatches, loginCookie, logoutCookie, hashPassword, verifyPassword, accountCookie, accountLogoutCookie, currentAccount } from '../../src/auth.js';
-import { METHODS, DEBT_PARAMS, replay, trace, tally, debtsFor, weightsFor, attendance } from '../../src/tally.js';
+import { METHODS, DEBT_PARAMS, replay, trace, tally, debtsFor, weightsFor, attendance, standings } from '../../src/tally.js';
 import { cleanSchedule } from '../../src/schedule.js';
 
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers });
@@ -207,6 +207,25 @@ route('POST', '/api/me/prints', async ({ db, me, body }) => {
 route('DELETE', '/api/me/prints/:id', async ({ db, me, params }) => {
   await db.prepare('DELETE FROM prints WHERE id = ? AND member_id = ?').bind(params.id, me.id).run();
   return json({ ok: true });
+});
+
+// ------------------------------------------------------------ hall of shame votes
+
+// Counts only, no names; plus which ones you voted for. Keyed by the title in shame.json.
+const shameVotes = async (db, me) => ({
+  counts: Object.fromEntries((await db.prepare('SELECT title, COUNT(*) AS n FROM shame_votes GROUP BY title').all()).results.map((r) => [r.title, r.n])),
+  mine: me ? (await db.prepare('SELECT title FROM shame_votes WHERE member_id = ?').bind(me.id).all()).results.map((r) => r.title) : [],
+});
+
+route('GET', '/api/shame/votes', async ({ db, me }) => json(await shameVotes(db, me)));
+
+// { title, vote: true | false }
+route('PUT', '/api/shame/votes', async ({ db, me, body }) => {
+  const title = str(body.title, 300);
+  if (!title) return bad('title required');
+  await db.prepare(body.vote === false ? 'DELETE FROM shame_votes WHERE title = ? AND member_id = ?'
+    : 'INSERT OR IGNORE INTO shame_votes (title, member_id) VALUES (?, ?)').bind(title, me.id).run();
+  return json(await shameVotes(db, me));
 });
 
 // ------------------------------------------------------------ member center
@@ -439,9 +458,12 @@ route('GET', '/api/elections/:id', async ({ db, params, me }) => {
   const candidates = await candidatesOf(db, e.id);
   const ballots = await ballotsOf(db, e.id);
   // While voting is open, show who has voted but not how, except to admins, who also get the count so far.
+  // Members who have voted get the standings so far, without anyone's ballot, weight or debt.
   const admin = isAdmin(me);
+  const hasVoted = !!me && ballots.some((b) => b.member_id === me.id);
   const shown = e.status === 'closed' || admin ? ballots : ballots.map(({ member_id, name, updated_at }) => ({ member_id, name, updated_at }));
-  const live = admin && e.status === 'voting' && ballots.length && candidates.length ? await count(db, e) : null;
+  const counting = (admin || hasVoted) && e.status === 'voting' && ballots.length && candidates.length;
+  const live = counting ? (admin ? await count(db, e) : standings(await count(db, e))) : null;
   const book = e.status === 'closed' ? await db.prepare('SELECT id, position, title FROM books_read WHERE election_id = ?').bind(e.id).first() : null;
   return json({ election: e, methods: METHODS, candidates, ballots: shown, live, book });
 });

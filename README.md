@@ -92,9 +92,10 @@ DISCORD_CHANNEL_ID=         # right-click the channel, forum or forum post -> Co
 # Optional:
 DISCORD_ALLOWED_USER_IDS=   # comma-separated; empty = everyone in the channel
 BOT_BACKFILL=100            # messages read on the first run (max 100)
-BOT_MAX_PRS=3               # PRs per scan; the rest wait
+BOT_MAX_PRS=                # most PRs per scan; empty = no limit
 BOT_INTERVAL_MIN=15         # minutes between scans with --watch
-BOT_MODEL=                  # empty = Claude Code default
+BOT_MODEL=                  # empty = claude-opus-5-5
+BOT_EFFORT=                 # empty = medium
 BOT_REPLY=1                 # 0 = don't post the PR link in Discord
 ```
 

@@ -28,9 +28,10 @@ const WATCH = process.argv.includes('--watch');
 const TOKEN = env.DISCORD_BOT_TOKEN;
 const CHANNEL = env.DISCORD_CHANNEL_ID;
 const BACKFILL = Math.min(Number(env.BOT_BACKFILL || 100), 100);
-const MAX_PRS = Number(env.BOT_MAX_PRS || 3);
+const MAX_PRS = Number(env.BOT_MAX_PRS || Infinity);
 const INTERVAL_MIN = Number(env.BOT_INTERVAL_MIN || 15);
-const MODEL = env.BOT_MODEL || '';
+const MODEL = env.BOT_MODEL || 'claude-opus-5-5';
+const EFFORT = env.BOT_EFFORT || 'medium';
 const REPLY = env.BOT_REPLY !== '0';
 const ALLOWED_USERS = (env.DISCORD_ALLOWED_USER_IDS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const BASE = env.BOT_BASE_BRANCH || 'main';
@@ -112,7 +113,7 @@ function claude({ cwd, prompt, schema, tools, allowed = [], mode, minutes }) {
     '--tools', tools.join(','), '--permission-mode', mode,
     '--strict-mcp-config', '--setting-sources', 'project', '--no-session-persistence',
   ];
-  if (MODEL) args.push('--model', MODEL);
+  args.push('--model', MODEL, '--effort', EFFORT);
   if (allowed.length) args.push('--allowedTools', ...allowed);
   return new Promise((resolve, reject) => {
     const child = spawn('claude', args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });

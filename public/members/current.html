@@ -67,7 +67,7 @@ function newElectionBox(me) {
 }
 
 async function load() {
-  const [{ books }, me] = await Promise.all([api('/api/books'), getMe()]);
+  const [books, me] = await Promise.all([api('/api/books'), getMe()]);
   const elections = el('div', el('p.muted', 'Loading…'));
   const { box: newElection, method: methodSelect } = newElectionBox(me);
   main.replaceChildren(

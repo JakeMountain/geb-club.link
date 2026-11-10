@@ -84,7 +84,6 @@ function drawMap() {
 
 function predictions(memberId) {
   const list = predict(entries, memberId).filter((p) => bookOf[p.book_id]);
-  const skipped = new Set(entries.filter((e) => e.member_id === memberId && e.tier === 'N').map((e) => e.book_id));
   if (!list.length) {
     const scored = new Set(entries.filter((e) => e.member_id === memberId && RANKED.includes(e.tier)).map((e) => e.book_id));
     const readAll = books.every((b) => scored.has(b.id));
@@ -94,7 +93,7 @@ function predictions(memberId) {
   return el('div.pred', list.map((p) => el('div.book',
     el('span.tierchip', p.tier), thumb(bookOf[p.book_id].cover_url),
     el('span', el('a', { href: `/members/book?id=${p.book_id}` }, el('cite', bookOf[p.book_id].title)),
-      el('span.muted.small', ` · from ${p.basis} member${p.basis === 1 ? '' : 's'}${skipped.has(p.book_id) ? " · you didn't read it" : ''}`)))));
+      el('span.muted.small', ` · from ${p.basis} member${p.basis === 1 ? '' : 's'}`)))));
 }
 
 if (!map) {

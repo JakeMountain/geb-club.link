@@ -375,7 +375,7 @@ async function scan() {
         log(`  ${req.pr}`);
         if (REPLY) {
           await discord('POST', `/channels/${req.channelId}/messages`, {
-            content: `Opened a PR for this: ${req.pr}`,
+            content: `PR opened: ${req.title}\n${req.pr}`,
             flags: 4, // no link preview
             message_reference: { message_id: req.messageIds[0], fail_if_not_exists: false },
             allowed_mentions: { parse: [], replied_user: false },

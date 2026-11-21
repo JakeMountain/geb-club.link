@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pairwise, condorcetWinner, smithSet, schwartzSet, copeland, minimax, rankedPairs, schulze, analyze } from '../public/members/condorcet.js';
+import { pairwise, condorcetWinner, smithSet, schwartzSet, copeland, minimax, rankedPairs, schulze, firstChoices, irv, smithIrv, tidemanAlternative, analyze } from '../public/members/condorcet.js';
 
 // Turn ranked ballots ("ACBED" x 5) into score ballots: first place gets the top score.
 const ranked = (groups) => groups.flatMap(([order, n], g) => Array.from({ length: n }, (_, i) => ({
@@ -43,6 +43,8 @@ test('rock, paper, scissors: an exact three-way tie stays a tie', () => {
   assert.deepEqual(copeland(ids, d), ids);
   assert.deepEqual(minimax(ids, d), ids);
   assert.deepEqual(schulze(ids, d), ids);
+  assert.deepEqual(smithIrv(ids, d, ballots), ids);
+  assert.deepEqual(tidemanAlternative(ids, d, ballots), ids);
 });
 
 test('Schwartz set can be smaller than the Smith set when there are head-to-head ties', () => {
@@ -59,4 +61,30 @@ test('a filter limits the field the methods choose from', () => {
   const r = analyze(['a', 'b', 'c', 'd'], ballots, {}, 'smith');
   assert.deepEqual(r.field, ['a', 'b', 'c']);
   assert.deepEqual(r.methods.find((m) => m.key === 'copeland').winners, ['a', 'b', 'c']);
+});
+
+test('center squeeze: plain IRV drops the Condorcet winner, Smith/IRV and Tideman\'s alternative keep it', () => {
+  const ballots = ranked([['LCR', 35], ['RCL', 33], ['CLR', 16], ['CRL', 16]]);
+  const ids = ['L', 'C', 'R'];
+  const d = pairwise(ids, ballots);
+  assert.equal(condorcetWinner(ids, d), 'C');
+  assert.deepEqual(irv(ids, ballots), ['L']);
+  assert.deepEqual(smithIrv(ids, d, ballots), ['C']);
+  assert.deepEqual(tidemanAlternative(ids, d, ballots), ['C']);
+});
+
+test('first choices split evenly between top-scored ties, and follow the weights', () => {
+  const ballots = [{ voter: 'x', scores: { a: 5, b: 5, c: 2 } }, { voter: 'y', scores: { c: 4 } }];
+  assert.deepEqual(firstChoices(['a', 'b', 'c'], ballots, { y: 3 }), { a: 0.5, b: 0.5, c: 3 });
+  assert.deepEqual(firstChoices(['a', 'c'], ballots), { a: 1, c: 1 });
+});
+
+test("Tideman's alternative on a cycle: drop the fewest first choices, then the head-to-head decides", () => {
+  // a beats b 6-4, b beats c 8-2, c beats a 6-4, and d loses to all. In the Smith set, first choices
+  // are a 4, b 4 (with d's ballot), c 2: c goes, and a beats b.
+  const ballots = ranked([['abcd', 4], ['bcad', 3], ['cabd', 2], ['dbca', 1]]);
+  const ids = ['a', 'b', 'c', 'd'];
+  const d = pairwise(ids, ballots);
+  assert.deepEqual(smithSet(ids, d), ['a', 'b', 'c']);
+  assert.deepEqual(tidemanAlternative(ids, d, ballots), ['a']);
 });

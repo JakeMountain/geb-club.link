@@ -53,7 +53,7 @@ Pages are plain HTML with a module script; there is no build step for local dev.
 | `public/style.css` | All shared styles: colors (light and dark), header, tables, forms, cards, election results, tier lists, covers. A page keeps only its own one-off styles in a `<style>` block. |
 | `public/nav.js` | Top bar on every page: the trip-let, one row of links (Current book, Members, and a Club menu with History and the club-wide pages), and "My page" and "Sign out" at the right when signed in (at the bottom of the Club menu on phones). The links are built here; each page's header only holds a fallback. |
 | `public/members/app.js` | Shared helpers for the members pages: `api`, `el`, book cards, book search, name display, tier list view and editor. |
-| `public/members/condorcet.js` | Pairwise counts, Smith and Schwartz sets, and Condorcet methods (Copeland, Minimax, Ranked pairs, Schulze) for the election page. |
+| `public/members/condorcet.js` | Pairwise counts, Smith and Schwartz sets, and Condorcet methods (Copeland, Minimax, Ranked pairs, Schulze, Smith/IRV, Tideman's alternative) for the election page. |
 | `public/members/tierstats.js` | Tier list statistics: club averages, agreement between members, taste map, predictions. |
 | `public/voting.html` | How we vote. Not in the top bar; linked from the election, current book, members and member pages. |
 | `functions/_middleware.js` | Club password gate. |

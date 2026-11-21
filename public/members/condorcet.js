@@ -85,6 +85,56 @@ export function schulze(ids, d) {
   return ids.filter((a) => ids.every((b) => a === b || p[a][b] >= p[b][a] - EPS));
 }
 
+// ---------------------------------------------------------------- instant runoff
+
+/** First-choice weight of each book in the field: a ballot's highest-scored book, split evenly between top ties. */
+export function firstChoices(field, ballots, weights = {}) {
+  const f = Object.fromEntries(field.map((c) => [c, 0]));
+  for (const bl of ballots) {
+    const top = Math.max(...field.map((c) => score(bl, c)));
+    const tops = field.filter((c) => score(bl, c) === top);
+    for (const c of tops) f[c] += (weights[bl.voter] ?? 1) / tops.length;
+  }
+  return f;
+}
+
+// Drop the book(s) with the least first-choice weight. Books tied for last go out together,
+// unless that would leave nobody: then the remaining books are a tie and nobody goes.
+function eliminate(field, ballots, weights) {
+  const f = firstChoices(field, ballots, weights);
+  const low = Math.min(...field.map((c) => f[c]));
+  const left = field.filter((c) => f[c] > low + EPS);
+  return left.length ? left : field;
+}
+
+/** Instant runoff over score ballots, until one book has a majority of the first choices or the rest are tied. */
+export function irv(field, ballots, weights = {}) {
+  let left = [...field];
+  while (left.length > 1) {
+    const f = firstChoices(left, ballots, weights), total = left.reduce((s, c) => s + f[c], 0);
+    const maj = left.find((c) => f[c] > total / 2 + EPS);
+    if (maj) return [maj];
+    const next = eliminate(left, ballots, weights);
+    if (next.length === left.length) return left;
+    left = next;
+  }
+  return left;
+}
+
+/** Smith/IRV: instant runoff among the Smith set. */
+export const smithIrv = (ids, d, ballots, weights) => irv(smithSet(ids, d), ballots, weights);
+
+/** Tideman's alternative: cut to the Smith set, drop the fewest first choices, and repeat. */
+export function tidemanAlternative(ids, d, ballots, weights) {
+  let left = smithSet(ids, d);
+  while (left.length > 1) {
+    const next = eliminate(left, ballots, weights);
+    if (next.length === left.length) return left;
+    left = smithSet(next, d);
+  }
+  return left;
+}
+
 export const METHODS = [
   ['condorcet', 'Condorcet winner', (ids, d) => { const w = condorcetWinner(ids, d); return w == null ? [] : [w]; }],
   ['copeland', 'Copeland', copeland],
@@ -92,6 +142,8 @@ export const METHODS = [
   ['minimax-wv', 'Minimax (winning votes)', (ids, d) => minimax(ids, d, 'winning')],
   ['ranked-pairs', 'Ranked pairs', rankedPairs],
   ['schulze', 'Schulze', schulze],
+  ['smith-irv', 'Smith/IRV', smithIrv],
+  ['tideman-alt', "Tideman's alternative", tidemanAlternative],
 ];
 
 /**
@@ -105,6 +157,6 @@ export function analyze(ids, ballots, weights, filter = 'all') {
   const field = filter === 'smith' ? smith : filter === 'schwartz' ? schwartz : ids;
   return {
     d, smith, schwartz, field,
-    methods: METHODS.map(([key, label, fn]) => ({ key, label, winners: fn(field, d) })),
+    methods: METHODS.map(([key, label, fn]) => ({ key, label, winners: fn(field, d, ballots, weights) })),
   };
 }

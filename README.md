@@ -37,7 +37,7 @@ Members:
 |---|---|
 | `/members/` | Sign in or create an account, member list with debt and weight, history with notes. |
 | `/members/current` | Current book with its reading schedule and calendar (admins edit it), and all elections. |
-| `/members/election?id=` | One election: nominate, vote, results. Unsent ballot picks are kept in the browser until submitted. Once you have voted you see the count so far, without anyone's ballot. |
+| `/members/election?id=` | One election: nominate, vote, results. Unsent ballot picks are kept in the browser until submitted. Once you have voted you see the count so far, without anyone's ballot. A collapsed "Head to head" section at the end (wherever the ballots are shown) has every pairwise matchup and the Condorcet methods' picks, debt-weighted or one vote each, from all books or the Smith or Schwartz set. |
 | `/members/book?id=` | One book: notes, who favorited it, link to its election. |
 | `/members/member?id=` | One member: weight, debt after each election, tier list, notes, want to read. |
 | `/members/me` | Your own page, in two views: Books (tier list, favorite, want to read, notes) and Account (profile, password, export). `/members/me#account` opens the second. |
@@ -53,6 +53,7 @@ Pages are plain HTML with a module script; there is no build step for local dev.
 | `public/style.css` | All shared styles: colors (light and dark), header, tables, forms, cards, election results, tier lists, covers. A page keeps only its own one-off styles in a `<style>` block. |
 | `public/nav.js` | Top bar on every page: the trip-let, one row of links (Current book, Members, and a Club menu with History and the club-wide pages), and "My page" and "Sign out" at the right when signed in (at the bottom of the Club menu on phones). The links are built here; each page's header only holds a fallback. |
 | `public/members/app.js` | Shared helpers for the members pages: `api`, `el`, book cards, book search, name display, tier list view and editor. |
+| `public/members/condorcet.js` | Pairwise counts, Smith and Schwartz sets, and Condorcet methods (Copeland, Minimax, Ranked pairs, Schulze) for the election page. |
 | `public/members/tierstats.js` | Tier list statistics: club averages, agreement between members, taste map, predictions. |
 | `public/voting.html` | How we vote. Not in the top bar; linked from the election, current book, members and member pages. |
 | `functions/_middleware.js` | Club password gate. |

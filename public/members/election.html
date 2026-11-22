@@ -35,6 +35,7 @@ details.h2h > summary h2 { display: inline; }
 <script type="module">
 import { api, el, fmt, pill, bookCard, bookSearch, getMe, who, thumb, coverUrl } from './app.js';
 import { analyze, copelandScore } from './condorcet.js';
+import { contributions, voterColors } from './contrib.js';
 
 const id = new URLSearchParams(location.search).get('id');
 const main = document.getElementById('main');
@@ -327,6 +328,18 @@ function headToHead(e, candidates, ballots, debtWeights, winnerId) {
     body);
 }
 
+// One voter highlighted on every bar, the legend and the ballots table (hover, focus or tap; tap again to let go).
+let pinned = null;
+const highlight = (voter) => {
+  main.classList.toggle('voter-hl', voter != null);
+  for (const n of main.querySelectorAll('[data-voter]')) n.classList.toggle('hl', n.dataset.voter === voter);
+};
+const hoverable = (voter) => ({
+  'data-voter': voter,
+  onmouseenter: () => highlight(voter), onmouseleave: () => highlight(pinned),
+  onclick: () => { pinned = pinned === voter ? null : voter; highlight(pinned); },
+});
+
 // The count: winner, scoring round, runoff and every ballot. Used for closed elections, and for
 // admins while voting is open (ballotAction adds a control to each ballot row). With ballots null
 // (members who have voted, while voting is open) the ballot table is left out.
@@ -343,6 +356,23 @@ function tallyView(e, candidates, ballots, r, winnerId, winnerLabel, ballotActio
   const runoffTotal = b ? (r.runoff[a] + r.runoff[b] + r.runoff.noPreference) || 1 : 1;
   const side = (cid) => el(`div.side${String(cid) === String(winnerId) ? '' : '.lost'}`, el('span.n', fmt(r.runoff[cid])), title(cid));
 
+  // With the ballots shown, each bar is split into one colored part per voter.
+  pinned = null;
+  main.classList.remove('voter-hl');
+  const parts = ballots?.length ? contributions(candidates, ballots, r.weights ?? {}, r.finalists) : null;
+  const colors = parts ? voterColors(ballots) : {};
+  const nameOf = Object.fromEntries((ballots ?? []).map((bl) => [String(bl.member_id), bl.name]));
+  const seg = (p, label, color = colors[p.voter]) => el('i.seg', { ...hoverable(p.voter), title: `${nameOf[p.voter]}: ${label}`,
+    style: `flex:${p.value} 1 0${color ? `;background:${color}` : ''}` });
+  const scoreLabel = (p) => (weighted ? `${p.score} × ${fmt(p.weight)} = ${fmt(p.value)}` : String(p.score));
+  const legend = parts && el('ul.legend', ballots.map((bl) => {
+    const v = String(bl.member_id);
+    return el('li', el('button.chip', { type: 'button', ...hoverable(v), onfocus: () => highlight(v), onblur: () => highlight(pinned) },
+      el('span.swatch', { style: `background:${colors[v]}` }), who(bl.name)));
+  }));
+  const runoffPart = (key, cls) => el(`i.${cls}${parts ? '.parts' : ''}`, { style: `flex:${r.runoff[key === 'none' ? 'noPreference' : key] / runoffTotal}` },
+    parts && parts.runoff[key].map((p) => key === 'none' ? seg(p, 'no preference', null) : seg(p, fmt(p.value))));
+
   return [
     el('div.card.winner-card', el('div.eyebrow', winnerLabel), bookCard(winner)),
     weighted && r.plainStarWinner !== String(winnerId)
@@ -351,11 +381,13 @@ function tallyView(e, candidates, ballots, r, winnerId, winnerLabel, ballotActio
       `${t.round === 'runoff' ? 'Runoff' : 'Scoring round'} tie: ${t.tied.map(title).join(', ')}. Broken by ${t.how}.`)),
 
     el('h2', 'Scoring round'),
+    legend,
     el('div.tally', [...candidates].sort((x, y) => r.totals[y.id] - r.totals[x.id]).map((c) => {
       const fin = r.finalists.includes(String(c.id)) ? '.fin' : '';
       return [
         el(`div.name${fin}`, cover(c), el('span', c.title, fin ? el('span.muted.small', { style: 'font-weight:400' }, ' · finalist') : '')),
-        el(`div.track${fin}`, el('div.bar', { style: `width:${(100 * r.totals[c.id]) / maxTotal}%` })),
+        el(`div.track${fin}`, el(`div.bar${parts ? '.parts' : ''}`, { style: `width:${(100 * r.totals[c.id]) / maxTotal}%` },
+          parts && parts.scoring[String(c.id)].map((p) => seg(p, scoreLabel(p))))),
         el(`div.val${fin}`, fmt(r.totals[c.id]))];
     })),
 
@@ -363,16 +395,14 @@ function tallyView(e, candidates, ballots, r, winnerId, winnerLabel, ballotActio
       el('div.runoff',
         el('div.sides', side(a), side(b)),
         el('div.split', { role: 'img', 'aria-label': `${title(a)} ${fmt(r.runoff[a])}, ${title(b)} ${fmt(r.runoff[b])}, no preference ${fmt(r.runoff.noPreference)}` },
-          el('i.a', { style: `flex:${r.runoff[a] / runoffTotal}` }),
-          el('i.none', { style: `flex:${r.runoff.noPreference / runoffTotal}` }),
-          el('i.b', { style: `flex:${r.runoff[b] / runoffTotal}` })),
+          runoffPart(a, 'a'), runoffPart('none', 'none'), runoffPart(b, 'b')),
         el('div.mid.muted.small', `No preference ${fmt(r.runoff.noPreference)}`))] : '',
 
     ballots && el('h2', `Ballots (${ballots.length})`),
     ballots && el('div.table-wrap.breakout', el('table.ballots',
       el('thead', el('tr', el('th.voter', 'Voter'), weighted && el('th.num', 'Debt'), el('th.num', 'Weight'),
         candidates.map((c) => el(`th.cand${isWinner(c) ? '.won' : ''}`, { title: c.title, scope: 'col' }, cover(c), el('span', c.title))))),
-      el('tbody', ballots.map((bl) => el('tr',
+      el('tbody', ballots.map((bl) => el('tr', parts ? { ...hoverable(String(bl.member_id)), style: `--vc:${colors[String(bl.member_id)]}` } : {},
         el('th.voter', { scope: 'row', title: bl.name }, who(bl.name), ballotAction && ballotAction(bl)),
         weighted && el('td.num', fmt(r.debts?.[bl.member_id])),
         el('td.num', fmt(r.weights[bl.member_id])),

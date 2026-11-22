@@ -1,4 +1,5 @@
 -- GEB club schema (Cloudflare D1 / SQLite)
+DROP TABLE IF EXISTS reading_progress;
 DROP TABLE IF EXISTS reading_sections;
 DROP TABLE IF EXISTS prints;
 DROP TABLE IF EXISTS book_tags;
@@ -26,7 +27,8 @@ CREATE TABLE members (
   storygraph_url TEXT,
   goodreads_url TEXT,
   favorite_book_id INTEGER REFERENCES books_read(id) ON DELETE SET NULL,
-  is_admin INTEGER NOT NULL DEFAULT 0  -- counts only when the account has a password
+  is_admin INTEGER NOT NULL DEFAULT 0, -- counts only when the account has a password
+  goodreads_progress INTEGER NOT NULL DEFAULT 0 -- 1 = show reading progress from the Goodreads updates feed
 );
 
 CREATE UNIQUE INDEX members_discord ON members (discord COLLATE NOCASE) WHERE discord IS NOT NULL;
@@ -155,6 +157,21 @@ CREATE TABLE reading_sections (
   end_at TEXT NOT NULL,
   due_date TEXT NOT NULL,  -- YYYY-MM-DD, the meeting it should be finished by
   UNIQUE (book_id, position)
+);
+
+-- reading progress on the current book (/members/current). source 'manual': entered on the page.
+-- source 'goodreads': cached result of reading the member's updates feed (opt-in); updated_at is
+-- the update's time, NULL when the feed had no match or could not be read.
+CREATE TABLE reading_progress (
+  member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  book_id INTEGER NOT NULL REFERENCES books_read(id) ON DELETE CASCADE,
+  source TEXT NOT NULL CHECK (source IN ('manual', 'goodreads')),
+  page INTEGER,
+  pages INTEGER,       -- page count, when known
+  percent INTEGER,     -- 0-100, instead of a page
+  updated_at TEXT,
+  fetched_at TEXT,     -- goodreads only: when the feed was last read
+  PRIMARY KEY (member_id, book_id, source)
 );
 
 -- votes to give a declined feature request (/members/shame) a second chance; keyed by its title in shame.json

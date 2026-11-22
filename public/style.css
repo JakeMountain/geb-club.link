@@ -268,6 +268,25 @@ h1 .pill { position: relative; top: -.2em; margin-left: .3rem; }
 .runoff .split .b { background: color-mix(in oklab, var(--accent) 45%, var(--rule)); }
 .runoff .mid { text-align: center; }
 
+/* bars split by voter, with a legend; one voter can be highlighted across them */
+.legend { display: flex; flex-wrap: wrap; gap: .4rem; list-style: none; padding: 0; margin: .6rem 0; }
+.legend li { margin: 0; }
+.legend .chip { display: inline-flex; align-items: center; gap: .4rem; font-size: .88rem; padding: .15rem .65rem; border-radius: 99px;
+  background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+.legend .chip:hover { filter: none; }
+.legend .chip .handle { display: none; }
+.legend .swatch { width: .7rem; height: .7rem; border-radius: 3px; flex: none; }
+.bar.parts { display: flex; gap: 1px; background: transparent; }
+.runoff .split i.parts { display: flex; gap: 1px; background: transparent; }
+.seg { display: block; min-width: 0; cursor: pointer; transition: opacity .15s; }
+.runoff .split .none .seg { background: color-mix(in srgb, var(--rule) 60%, transparent); }
+.ballots tr[data-voter] { cursor: pointer; }
+.ballots tr[data-voter] .voter { box-shadow: inset 4px 0 0 var(--vc), 1px 0 0 var(--rule); padding-left: .75rem; }
+.voter-hl .seg:not(.hl) { opacity: .2; }
+.voter-hl .legend .chip:not(.hl) { opacity: .45; }
+.legend .chip.hl { border-color: var(--ink); }
+.ballots tr.hl > * { background: var(--accent-soft); }
+
 /* every ballot: voters down, books across; the voter column stays put */
 .ballots { width: auto; min-width: 100%; border-collapse: separate; border-spacing: 0; }
 .ballots th, .ballots td { vertical-align: middle; padding: .5rem .45rem; }

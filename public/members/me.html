@@ -40,6 +40,7 @@ function profileSection() {
   const discord = el('input', { id: 'pf-discord', maxLength: 40, value: me.discord ?? '', style: 'width:100%' });
   const sg = el('input', { id: 'pf-sg', type: 'url', value: me.storygraph_url ?? '', placeholder: 'https://app.thestorygraph.com/profile/…', style: 'width:100%' });
   const gr = el('input', { id: 'pf-gr', type: 'url', value: me.goodreads_url ?? '', placeholder: 'https://www.goodreads.com/user/show/…', style: 'width:100%' });
+  const grProgress = el('input', { id: 'pf-gr-progress', type: 'checkbox', checked: me.goodreads_progress });
   const msg = errorLine(), ok = okLine();
   return [el('h2', 'Profile'), form([
     el('div.row',
@@ -47,9 +48,11 @@ function profileSection() {
       el('div', el('label', { htmlFor: 'pf-discord' }, 'Discord handle'), discord)),
     el('label', { htmlFor: 'pf-sg' }, 'StoryGraph'), sg,
     el('label', { htmlFor: 'pf-gr' }, 'Goodreads'), gr,
+    el('label', { htmlFor: 'pf-gr-progress', style: 'color:inherit' }, grProgress, ' Show my Goodreads progress on the current book'),
+    el('p.muted.small', 'Read from your public Goodreads updates, including progress synced from Kindle. Only signed-in members see it.'),
     el('p', el('button', 'Save')),
   ], async () => {
-    await saveMe({ first_name: first.value, discord: discord.value, storygraph_url: sg.value, goodreads_url: gr.value });
+    await saveMe({ first_name: first.value, discord: discord.value, storygraph_url: sg.value, goodreads_url: gr.value, goodreads_progress: grProgress.checked });
     document.getElementById('who').replaceChildren(who(me.name));
   }, msg, ok)];
 }

@@ -33,7 +33,7 @@
 </nav></header>
 <main class="wide" id="main"><p class="muted">Loading…</p></main>
 <script type="module">
-import { api, el, pill, bookLinks, getMe } from './app.js';
+import { api, el, pill, bookLinks, getMe, who } from './app.js';
 import { addDays, nextMonday, today, splitPages, sectionLabel, formatDate, calendarMonths } from './schedule.js';
 
 const main = document.getElementById('main');
@@ -137,6 +137,51 @@ function scheduleSection(book, me) {
   return [el('h2', 'Reading schedule'), box, editor];
 }
 
+// ---------------------------------------------------------------- reading progress (signed-in members only)
+const progressText = (p) => (p.percent != null ? `${p.percent}%` : p.pages ? `page ${p.page} of ${p.pages}` : `page ${p.page}`);
+
+function progressView(progress) {
+  if (!progress.length) return [el('p.muted', 'None yet.')];
+  const year = today().slice(0, 4);
+  return [el('div.table-wrap', el('table.progress', el('tbody', progress.map((p) => el('tr',
+    el('td', el('a', { href: `/members/member?id=${p.member_id}` }, who(p.name))),
+    el('td', progressText(p)),
+    el('td.muted.small', [formatDate(p.updated_at.slice(0, 10), year), p.source === 'goodreads' && 'Goodreads'].filter(Boolean).join(' · ')))))))];
+}
+
+function progressForm(mine, onSaved) {
+  const page = el('input', { id: 'pg-page', type: 'number', min: 1, inputMode: 'numeric', value: mine?.page ?? '', style: 'width:100%' });
+  const pages = el('input', { id: 'pg-pages', type: 'number', min: 1, inputMode: 'numeric', value: mine?.pages ?? '', style: 'width:100%' });
+  const percent = el('input', { id: 'pg-percent', type: 'number', min: 0, max: 100, inputMode: 'numeric', value: mine?.percent ?? '', style: 'width:100%' });
+  const msg = el('p.small', { role: 'status' });
+  const send = async (body) => {
+    msg.className = 'small'; msg.textContent = 'Saving…';
+    try { onSaved(await api('/api/progress', { method: 'PUT', body })); msg.className = 'small ok'; msg.textContent = 'Saved.'; }
+    catch (err) { msg.className = 'small error'; msg.textContent = err.message; }
+  };
+  const f = el('form',
+    el('div.row',
+      el('div', el('label', { htmlFor: 'pg-page' }, 'Page'), page),
+      el('div', el('label', { htmlFor: 'pg-pages' }, 'Of'), pages),
+      el('div', el('label', { htmlFor: 'pg-percent' }, 'Or percent'), percent),
+      el('button', 'Save'),
+      mine && el('button.secondary', { type: 'button', onclick: () => send({}) }, 'Clear')),
+    msg);
+  f.addEventListener('submit', (e) => { e.preventDefault(); send({ page: page.value, pages: pages.value, percent: percent.value }); });
+  return el('details.card', el('summary', 'Enter your progress'), f);
+}
+
+function progressSection() {
+  const box = el('div', el('p.muted', 'Loading…'));
+  const editor = el('div');
+  const show = ({ progress, mine }) => {
+    box.replaceChildren(...progressView(progress));
+    editor.replaceChildren(progressForm(mine, show));
+  };
+  api('/api/progress').then(show).catch((err) => box.replaceChildren(el('p.error', err.message)));
+  return [el('h2', 'Progress'), box, editor];
+}
+
 function currentBook(book) {
   if (!book) return [el('p.muted', 'None yet.')];
   return [
@@ -191,6 +236,7 @@ async function load() {
   main.replaceChildren(
     el('h1', 'Current book'),
     ...currentBook(book),
+    ...(book && me ? progressSection() : []),
     ...(book ? scheduleSection(book, me) : []),
     el('h2', 'Elections'),
     el('p.small', el('a', { href: '/voting' }, 'How we vote')),

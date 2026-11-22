@@ -2,6 +2,7 @@
 import { passwordMatches, loginCookie, logoutCookie, hashPassword, verifyPassword, accountCookie, accountLogoutCookie, currentAccount } from '../../src/auth.js';
 import { METHODS, DEBT_PARAMS, replay, trace, tally, debtsFor, weightsFor, attendance, standings } from '../../src/tally.js';
 import { cleanSchedule } from '../../src/schedule.js';
+import { cleanProgress, goodreadsUserId, goodreadsFeedUrl, parseUpdates, latestFor } from '../../src/progress.js';
 
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers });
 const bad = (msg, status = 400) => json({ error: msg }, status);
@@ -12,6 +13,7 @@ const ADMINS_ONLY = () => bad('admins only', 403);
 const publicMember = (m) => m && {
   id: m.id, name: m.name, first_name: m.first_name, discord: m.discord, has_password: !!m.pw_hash, created_at: m.created_at,
   storygraph_url: m.storygraph_url, goodreads_url: m.goodreads_url, favorite_book_id: m.favorite_book_id, is_admin: isAdmin(m),
+  goodreads_progress: !!m.goodreads_progress,
 };
 const memberExists = async (db, id) => Number.isInteger(id) && !!(await db.prepare('SELECT id FROM members WHERE id = ?').bind(id).first());
 
@@ -163,6 +165,13 @@ route('PATCH', '/api/me', async ({ env, db, me, body }) => {
     const link = profileLink(field, body[field]);
     if (link.error) return bad(link.error);
     m = await db.prepare(`UPDATE members SET ${field} = ? WHERE id = ? RETURNING *`).bind(link.value, me.id).first();
+  }
+  if ('goodreads_progress' in body) {
+    m = await db.prepare('UPDATE members SET goodreads_progress = ? WHERE id = ? RETURNING *').bind(body.goodreads_progress ? 1 : 0, me.id).first();
+  }
+  // a new link or setting reads the feed again on the next visit
+  if ('goodreads_url' in body || 'goodreads_progress' in body) {
+    await db.prepare("DELETE FROM reading_progress WHERE member_id = ? AND source = 'goodreads'").bind(me.id).run();
   }
   if ('favorite_book_id' in body) {
     const fav = body.favorite_book_id == null || body.favorite_book_id === '' ? null : Number(body.favorite_book_id);
@@ -316,6 +325,73 @@ route('PUT', '/api/books/:id/schedule', async ({ db, me, params, body }) => {
       .bind(book.id, i, s.unit, s.start_at, s.end_at, s.due_date)),
   ]);
   return json({ sections: await scheduleOf(db, book.id) });
+});
+
+// ------------------------------------------------------------ reading progress (on /members/current)
+
+const GOODREADS_CACHE = '-3 hours';
+const currentBookRow = (db) => db.prepare('SELECT id, title FROM books_read ORDER BY position DESC LIMIT 1').first();
+
+// A member's latest Goodreads progress on a book, from their public updates feed, cached in reading_progress.
+// A feed that can't be read or has no match counts as no progress (and is cached the same way).
+async function goodreadsProgress(db, member, book) {
+  const cached = await db.prepare(`SELECT page, pages, percent, updated_at, fetched_at > datetime('now', ?) AS fresh
+    FROM reading_progress WHERE member_id = ? AND book_id = ? AND source = 'goodreads'`).bind(GOODREADS_CACHE, member.id, book.id).first();
+  if (cached?.fresh) return cached.updated_at ? cached : null;
+  let found = null;
+  const id = goodreadsUserId(member.goodreads_url);
+  if (id) {
+    try {
+      const res = await fetch(goodreadsFeedUrl(id), { headers: { 'User-Agent': 'geb-club.link', Accept: 'application/rss+xml, application/xml' }, signal: AbortSignal.timeout(5000) });
+      if (res.ok) found = latestFor(parseUpdates(await res.text()), book.title);
+    } catch {}
+  }
+  await db.prepare(`INSERT INTO reading_progress (member_id, book_id, source, page, pages, percent, updated_at, fetched_at)
+    VALUES (?, ?, 'goodreads', ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT (member_id, book_id, source) DO UPDATE SET page = excluded.page, pages = excluded.pages,
+      percent = excluded.percent, updated_at = excluded.updated_at, fetched_at = excluded.fetched_at`)
+    .bind(member.id, book.id, found?.page ?? null, found?.pages ?? null, found?.percent ?? null, found?.updated_at ?? null).run();
+  return found;
+}
+
+// Signed-in members only. Each member's newest progress on the current book, by hand or from Goodreads.
+async function progressOf(db, me) {
+  const book = await currentBookRow(db);
+  if (!book) return { book_id: null, progress: [], mine: null };
+  const manual = (await db.prepare(`SELECT p.member_id, m.name, p.page, p.pages, p.percent, p.updated_at FROM reading_progress p
+    JOIN members m ON m.id = p.member_id WHERE p.book_id = ? AND p.source = 'manual'`).bind(book.id).all()).results
+    .map((p) => ({ ...p, source: 'manual' }));
+  const opted = (await db.prepare(`SELECT id, name, goodreads_url FROM members
+    WHERE goodreads_progress = 1 AND goodreads_url IS NOT NULL AND active = 1`).all()).results;
+  const fromGoodreads = await Promise.all(opted.map(async (m) => {
+    const p = await goodreadsProgress(db, m, book);
+    return p && { member_id: m.id, name: m.name, page: p.page, pages: p.pages, percent: p.percent, updated_at: p.updated_at, source: 'goodreads' };
+  }));
+  const newest = {};
+  for (const p of [...manual, ...fromGoodreads.filter(Boolean)]) {
+    if (!newest[p.member_id] || p.updated_at > newest[p.member_id].updated_at) newest[p.member_id] = p;
+  }
+  return {
+    book_id: book.id,
+    progress: Object.values(newest).sort((a, b) => a.name.localeCompare(b.name)),
+    mine: manual.find((p) => p.member_id === me.id) ?? null,
+  };
+}
+
+route('GET', '/api/progress', async ({ db, me }) => (me ? json(await progressOf(db, me)) : SIGNED_OUT()));
+
+// Your own progress on the current book: { page, pages } or { percent }; nothing clears it.
+route('PUT', '/api/progress', async ({ db, me, body }) => {
+  const book = await currentBookRow(db);
+  if (!book) return bad('no current book', 404);
+  const p = cleanProgress(body);
+  if (p.error) return bad(p.error);
+  await db.prepare(p.clear ? "DELETE FROM reading_progress WHERE member_id = ? AND book_id = ? AND source = 'manual'"
+    : `INSERT INTO reading_progress (member_id, book_id, source, page, pages, percent, updated_at) VALUES (?, ?, 'manual', ?, ?, ?, datetime('now'))
+       ON CONFLICT (member_id, book_id, source) DO UPDATE SET page = excluded.page, pages = excluded.pages,
+         percent = excluded.percent, updated_at = excluded.updated_at`)
+    .bind(me.id, book.id, ...(p.clear ? [] : [p.page, p.pages, p.percent])).run();
+  return json(await progressOf(db, me));
 });
 
 // ------------------------------------------------------------ tier lists

@@ -6,6 +6,24 @@
 <title>Election · GEB Club</title>
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="/favicon.svg">
+<style>
+details.h2h { margin-top: 2.5rem; }
+details.h2h > summary { list-style-position: outside; }
+details.h2h > summary h2 { display: inline; }
+.h2h-controls { display: flex; flex-wrap: wrap; gap: .4rem 2rem; margin: .8rem 0; }
+.h2h-opts { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .2rem 1rem; align-items: center; }
+.h2h-opts legend { float: left; margin-right: .2rem; padding: 0; }
+.h2h-opts label { white-space: nowrap; }
+.h2h-methods th { text-align: left; font-weight: 400; text-transform: none; letter-spacing: 0; font-size: inherit; color: var(--muted); white-space: normal; }
+.pairwise td.pw { text-align: center; }
+.pairwise td.pw b { display: inline-flex; align-items: center; justify-content: center; min-width: 2.2rem; height: 2rem; padding: 0 .3rem; border-radius: 7px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.pairwise td.win b { background: color-mix(in oklab, var(--good) 28%, transparent); }
+.pairwise td.loss b { color: var(--muted); }
+.pairwise td.tie b { outline: 1px dashed var(--rule); }
+.pairwise td.self { color: var(--muted); }
+.pairwise .out, .pairwise th.out { opacity: .45; }
+.pairwise tbody .voter { font-size: .85rem; }
+</style>
 </head>
 <body>
 <header class="site"><nav>
@@ -16,6 +34,7 @@
 <main id="main"><p class="muted">Loading…</p></main>
 <script type="module">
 import { api, el, fmt, pill, bookCard, bookSearch, getMe, who, thumb, coverUrl } from './app.js';
+import { analyze, copelandScore } from './condorcet.js';
 
 const id = new URLSearchParams(location.search).get('id');
 const main = document.getElementById('main');
@@ -26,7 +45,7 @@ async function load() {
   const [data, ms, m] = await Promise.all([api(`/api/elections/${id}`), api('/api/members'), getMe()]);
   members = ms;
   me = m;
-  const { election: e, candidates, ballots, methods, live, book } = data;
+  const { election: e, candidates, ballots, methods, live, book, debtWeights } = data;
   document.title = `${e.title} · GEB Club`;
   const head = [
     el('p.small.back', el('a', { href: '/members/current' }, '← All elections')),
@@ -38,8 +57,8 @@ async function load() {
       }, '.link.small')]),
   ];
   const body = e.status === 'nominating' ? nominating(e, candidates)
-    : e.status === 'voting' ? await voting(e, candidates, ballots, live)
-    : results(e, candidates, ballots, book);
+    : e.status === 'voting' ? await voting(e, candidates, ballots, live, debtWeights)
+    : results(e, candidates, ballots, book, debtWeights);
   main.replaceChildren(...[...head, ...body].flat(Infinity).filter((n) => n != null && n !== false && n !== ''));
 }
 
@@ -162,7 +181,7 @@ function nominating(e, candidates) {
 }
 
 // ---------------------------------------------------------------- voting
-async function voting(e, candidates, ballots, live) {
+async function voting(e, candidates, ballots, live, debtWeights) {
   const voted = new Set(ballots.map((b) => String(b.member_id)));
   const votedList = [
     el('h2', `Voted (${ballots.length})`),
@@ -225,7 +244,8 @@ async function voting(e, candidates, ballots, live) {
     admin() && [el('h2', 'Count so far'),
       live ? tallyView(e, candidates, ballots, live, live.winner, 'Winning now',
         (bl) => action('Remove', () => confirm(`Remove ${bl.name}'s ballot?`) && api(`/api/elections/${id}/ballots/${bl.member_id}`, { method: 'DELETE' }), '.link.small'))
-        : el('p.muted', 'No ballots yet')],
+        : el('p.muted', 'No ballots yet'),
+      live && headToHead(e, candidates, ballots, debtWeights, live.winner)],
     !admin() && cast && live && [el('h2', 'Count so far'), tallyView(e, candidates, null, live, live.winner, 'Winning now')],
     el('div.actions',
       action('Close voting and count', async () => {
@@ -237,10 +257,75 @@ async function voting(e, candidates, ballots, live) {
 }
 
 // ---------------------------------------------------------------- results
-const results = (e, candidates, ballots, book) => {
+const results = (e, candidates, ballots, book, debtWeights) => {
   const [winner, ...rest] = tallyView(e, candidates, ballots, e.result, e.winner_id, 'Winner');
-  return [winner, book && el('p.small', el('a', { href: `/members/book?id=${book.id}` }, 'Notes and favorites')), ...rest];
+  return [winner, book && el('p.small', el('a', { href: `/members/book?id=${book.id}` }, 'Notes and favorites')), ...rest,
+    headToHead(e, candidates, ballots, debtWeights, e.winner_id)];
 };
+
+// ---------------------------------------------------------------- head to head
+// Collapsed at the end: every pair of books, and who Condorcet methods would pick,
+// with or without debt weights, from all books or only the Smith or Schwartz set.
+function headToHead(e, candidates, ballots, debtWeights, winnerId) {
+  if (!ballots?.length || candidates.length < 2 || !ballots[0].scores) return '';
+  const byId = Object.fromEntries(candidates.map((c) => [String(c.id), c]));
+  const ids = candidates.map((c) => String(c.id));
+  const votes = ballots.map((b) => ({ voter: String(b.member_id), scores: b.scores }));
+  const title = (cid) => byId[cid]?.title ?? '?';
+  const names = (xs) => xs.map(title).join(', ');
+  const key = `h2h-${e.id}`;
+  let weighting = debtWeights && e.method === 'debt-star' ? 'debt' : 'equal', filter = 'all';
+
+  const radios = (name, legend, options, current, set) => el('fieldset.h2h-opts',
+    el('legend.small.muted', legend),
+    options.map(([value, label]) => el('label',
+      el('input', { type: 'radio', name: `${key}-${name}`, value, checked: value === current, onchange: () => { set(value); draw(); } }),
+      ' ', label)));
+
+  const body = el('div');
+  const draw = () => {
+    const r = analyze(ids, votes, weighting === 'debt' ? debtWeights : {}, filter);
+    const inField = new Set(r.field);
+    const rows = [...ids].sort((a, b) => copelandScore(ids, r.d, b) - copelandScore(ids, r.d, a));
+    const record = (a) => {
+      let w = 0, l = 0, t = 0;
+      for (const b of ids) if (b !== a) { const x = r.d[a][b] - r.d[b][a]; if (Math.abs(x) < 1e-9) t++; else if (x > 0) w++; else l++; }
+      return `${w}–${l}${t ? `–${t}` : ''}`;
+    };
+    const outcome = (ws) => (!ws.length ? el('span.muted', 'none: no book beats every other')
+      : ws.length > 1 ? ['Tie: ', names(ws)]
+      : el(ws[0] === String(winnerId) ? 'strong' : 'span', title(ws[0])));
+    body.replaceChildren(
+      el('div.table-wrap', el('table.h2h-methods',
+        el('tbody', r.methods.map((m) => el('tr', el('th', { scope: 'row' }, m.label), el('td', outcome(m.winners))))))),
+      el('p.small', el('strong', 'Smith set: '), names(r.smith), el('br'), el('strong', 'Schwartz set: '), names(r.schwartz)),
+      el('div.table-wrap.breakout', el('table.ballots.pairwise',
+        el('thead', el('tr', el('th.voter', 'Row over column'), el('th.num', 'Record'),
+          rows.map((c) => el(`th.cand${inField.has(c) ? '' : '.out'}`, { title: title(c), scope: 'col' },
+            thumb(byId[c].cover_url || coverUrl(byId[c].cover_id, 'S')), el('span', title(c)))))),
+        el('tbody', rows.map((a) => el(`tr${inField.has(a) ? '' : '.out'}`,
+          el('th.voter', { scope: 'row', title: title(a) }, title(a)),
+          el('td.num', record(a)),
+          rows.map((b) => {
+            if (a === b) return el('td.pw.self', '—');
+            const x = r.d[a][b] - r.d[b][a];
+            const cls = Math.abs(x) < 1e-9 ? 'tie' : x > 0 ? 'win' : 'loss';
+            return el(`td.pw.${cls}`, { title: `${title(a)} over ${title(b)}: ${fmt(r.d[a][b])} to ${fmt(r.d[b][a])}` }, el('b', fmt(r.d[a][b])));
+          })))))),
+    );
+  };
+  draw();
+
+  return el('details.h2h',
+    el('summary', el('h2', 'Head to head')),
+    el('p.small.muted', 'Each cell is how much voting weight scored the row\'s book above the column\'s book (equal scores count for neither). ',
+      'Green: the row book wins that pair. Methods choose from the books in the field; the STAR winner is in bold.',
+      e.method !== 'debt-star' && debtWeights ? ' This election used plain STAR; debt weights are what each voter would have had.' : ''),
+    el('div.h2h-controls',
+      debtWeights && radios('w', 'Weighting', [['debt', 'Debt-weighted'], ['equal', 'One vote each']], weighting, (v) => (weighting = v)),
+      radios('f', 'Field', [['all', 'All books'], ['smith', 'Smith set'], ['schwartz', 'Schwartz set']], filter, (v) => (filter = v))),
+    body);
+}
 
 // The count: winner, scoring round, runoff and every ballot. Used for closed elections, and for
 // admins while voting is open (ballotAction adds a control to each ballot row). With ballots null

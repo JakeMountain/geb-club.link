@@ -465,7 +465,10 @@ route('GET', '/api/elections/:id', async ({ db, params, me }) => {
   const counting = (admin || hasVoted) && e.status === 'voting' && ballots.length && candidates.length;
   const live = counting ? (admin ? await count(db, e) : standings(await count(db, e))) : null;
   const book = e.status === 'closed' ? await db.prepare('SELECT id, position, title FROM books_read WHERE election_id = ?').bind(e.id).first() : null;
-  return json({ election: e, methods: METHODS, candidates, ballots: shown, live, book });
+  // Whoever sees the ballots also gets each voter's debt weight, for the head-to-head view's
+  // weighting switch: the weights the count used, or for a plain STAR election the ones it would have.
+  const debtWeights = e.status === 'closed' || (admin && e.status === 'voting') ? await debtWeightsFor(db, e, ballots, live) : null;
+  return json({ election: e, methods: METHODS, candidates, ballots: shown, live, book, debtWeights });
 });
 
 route('PATCH', '/api/elections/:id', async ({ db, params, body }) => {
@@ -592,6 +595,19 @@ async function count(db, e) {
   const ballots = (await ballotsOf(db, e.id)).map((b) => ({ voter: String(b.member_id), scores: b.scores }));
   const state = await debtState(db, e.id);
   return tally({ method: e.method, candidates: cands.map((c) => String(c.id)), ballots, seed: `election-${e.id}` }, state);
+}
+
+// Debt weights of an election's voters, as of when it was (or will be) counted.
+async function debtWeightsFor(db, e, ballots, live) {
+  const counted = e.method === 'debt-star' && (e.status === 'closed' ? e.result : live)?.weights;
+  if (counted) return counted;
+  let state;
+  if (e.status === 'closed') {
+    const history = await closedHistory(db);
+    const i = history.findIndex((h) => h.id === e.id);
+    state = replay(i < 0 ? history : history.slice(0, i), await startState(db));
+  } else state = await debtState(db, e.id);
+  return weightsFor(state, ballots.map((b) => String(b.member_id)));
 }
 
 route('POST', '/api/elections/:id/close', async ({ db, params, body }) => {

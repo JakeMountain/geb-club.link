@@ -28,5 +28,15 @@
     "title": "Track AI usage and show a tree-planting offset counter",
     "reason": "The site has no access to the subscription's usage data, and the maintainer confirmed it can't really be tracked, so any number would be made up.",
     "date": "2026-11-10"
+  },
+  {
+    "title": "Add pairwise comparison and Condorcet views to the election page",
+    "reason": "Open pull request #21 already covers this.",
+    "date": "2026-11-22"
+  },
+  {
+    "title": "Fix the top of the page getting cut off after scrolling back up on mobile Firefox",
+    "reason": "Open pull request #20 already covers this.",
+    "date": "2026-11-22"
   }
 ]

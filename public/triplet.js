@@ -162,9 +162,16 @@ export function mountTriplet(canvas, { interactive = true, sway = true, zoom = 1
       theta += (want - theta) * 0.03; phi += (wantPhi - phi) * 0.03;
     }
     draw();
-    requestAnimationFrame(tick);
+    frame = visible ? requestAnimationFrame(tick) : 0;
   };
-  requestAnimationFrame(tick);
+  // Animate only while the canvas is on screen. Redrawing it every frame while the page
+  // scrolls starves Firefox on Android, which then leaves the top of the page unpainted.
+  let frame = 0, visible = true;
+  new IntersectionObserver(([e]) => {
+    visible = e.isIntersecting;
+    if (visible && !frame) frame = requestAnimationFrame(tick);
+  }).observe(canvas);
+  frame = requestAnimationFrame(tick);
 
   if (interactive) {
     canvas.style.touchAction = 'pan-y';

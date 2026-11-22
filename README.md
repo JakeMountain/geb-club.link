@@ -36,7 +36,7 @@ Members:
 | Page | What |
 |---|---|
 | `/members/` | Sign in or create an account, member list with debt and weight, history with notes. |
-| `/members/current` | Current book with its reading schedule and calendar (admins edit it), and all elections. |
+| `/members/current` | Current book with its reading schedule and calendar (any signed-in member can edit it), and all elections. |
 | `/members/election?id=` | One election: nominate, vote, results. Unsent ballot picks are kept in the browser until submitted. Once you have voted you see the count so far, without anyone's ballot. |
 | `/members/book?id=` | One book: notes, who favorited it, link to its election. |
 | `/members/member?id=` | One member: weight, debt after each election, tier list, notes, want to read. |

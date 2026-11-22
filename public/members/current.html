@@ -132,7 +132,7 @@ function scheduleSection(book, me) {
   const editor = el('div');
   api(`/api/books/${book.id}/schedule`).then(({ sections }) => {
     box.replaceChildren(...scheduleView(sections));
-    if (me?.is_admin) editor.replaceChildren(scheduleEditor(book, sections, (saved) => box.replaceChildren(...scheduleView(saved))));
+    if (me) editor.replaceChildren(scheduleEditor(book, sections, (saved) => box.replaceChildren(...scheduleView(saved))));
   }).catch((err) => box.replaceChildren(el('p.error', err.message)));
   return [el('h2', 'Reading schedule'), box, editor];
 }

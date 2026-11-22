@@ -303,9 +303,9 @@ const scheduleOf = (db, bookId) =>
 
 route('GET', '/api/books/:id/schedule', async ({ db, params }) => json({ sections: await scheduleOf(db, params.id) }));
 
-// Admins: replace a book's whole schedule; an empty list clears it.
+// Any signed-in member: replace a book's whole schedule; an empty list clears it.
 route('PUT', '/api/books/:id/schedule', async ({ db, me, params, body }) => {
-  if (!isAdmin(me)) return ADMINS_ONLY();
+  if (!me) return SIGNED_OUT();
   const book = await db.prepare('SELECT id FROM books_read WHERE id = ?').bind(params.id).first();
   if (!book) return bad('no such book', 404);
   const { sections, error } = cleanSchedule(body.sections);

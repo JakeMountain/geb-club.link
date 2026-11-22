@@ -8,7 +8,7 @@
 <link rel="icon" href="/favicon.svg">
 <style>
 details.h2h { margin-top: 2.5rem; }
-details.h2h > summary { list-style-position: outside; }
+details.h2h > summary { list-style-position: inside; }
 details.h2h > summary h2 { display: inline; }
 .h2h-controls { display: flex; flex-wrap: wrap; gap: .4rem 2rem; margin: .8rem 0; }
 .h2h-opts { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .2rem 1rem; align-items: center; }
@@ -23,6 +23,7 @@ details.h2h > summary h2 { display: inline; }
 .pairwise td.self { color: var(--muted); }
 .pairwise .out, .pairwise th.out { opacity: .45; }
 .pairwise tbody .voter { font-size: .85rem; }
+.pairwise thead th.voter { white-space: normal; }
 </style>
 </head>
 <body>
